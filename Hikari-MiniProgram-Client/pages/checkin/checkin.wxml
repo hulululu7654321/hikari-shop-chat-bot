@@ -1,0 +1,85 @@
+<view class="checkin-container">
+
+  <!-- 顶部装饰条（与 chat 页 tech-strip 一致） -->
+  <view class="top-bar">
+    <text class="top-bar-title">希卡莉终端</text>
+    <view class="top-bar-dot"></view>
+  </view>
+
+  <!-- 主体内容 -->
+  <view class="main-body">
+
+    <!-- 状态：加载中 -->
+    <block wx:if="{{status === 'loading'}}">
+      <view class="avatar-ring loading-ring-outer">
+        <image class="hikari-avatar" src="/assets/images/hikari.png" mode="aspectFill" />
+        <view class="ring-spin"></view>
+      </view>
+      <text class="status-title">正在确认二维码喵…</text>
+      <text class="status-sub">请稍等一下</text>
+    </block>
+
+    <!-- 状态：成功 -->
+    <block wx:if="{{status === 'success'}}">
+      <view class="avatar-ring success-ring">
+        <image class="hikari-avatar" src="/assets/images/hikari.png" mode="aspectFill" />
+        <view class="ring-success"></view>
+      </view>
+      <text class="status-title">{{welcomeText}}</text>
+      <text class="status-sub">签到成功 · 在店模式已开启</text>
+      <view class="info-card">
+        <view class="info-row">
+          <text class="info-label">欢迎</text>
+          <text class="info-value">{{displayName}}</text>
+        </view>
+        <view class="info-divider"></view>
+        <view class="info-row">
+          <text class="info-label">状态</text>
+          <view class="status-badge">
+            <view class="badge-dot"></view>
+            <text class="badge-text">在店中</text>
+          </view>
+        </view>
+      </view>
+      <view class="btn-primary" bindtap="goToChat">
+        <text>开始和希卡莉聊天</text>
+      </view>
+    </block>
+
+    <!-- 状态：新客户 -->
+    <block wx:if="{{status === 'new'}}">
+      <view class="avatar-ring new-ring">
+        <image class="hikari-avatar" src="/assets/images/hikari.png" mode="aspectFill" />
+        <view class="ring-new"></view>
+      </view>
+      <text class="status-title">欢迎新冒险者光临喵！</text>
+      <text class="status-sub">本喵是希卡莉，很高兴认识你～</text>
+      <view class="info-card new-card">
+        <text class="new-tip">告诉本喵你的名字，咱们就是朋友啦！</text>
+      </view>
+      <view class="btn-primary" bindtap="goToChat">
+        <text>和希卡莉打招呼</text>
+      </view>
+    </block>
+
+    <!-- 状态：失败/过期 -->
+    <block wx:if="{{status === 'error'}}">
+      <view class="avatar-ring error-ring">
+        <image class="hikari-avatar" src="/assets/images/hikari.png" mode="aspectFill" />
+        <view class="ring-error"></view>
+      </view>
+      <text class="status-title">{{errorMsg}}</text>
+      <text class="status-sub">请扫店内最新的二维码喵～</text>
+      <view class="btn-secondary" bindtap="goBack">
+        <text>返回</text>
+      </view>
+    </block>
+
+  </view>
+
+  <!-- 底部装饰 -->
+  <view class="bottom-deco">
+    <text class="deco-text">HIKARI TERMINAL · IN-STORE MODE</text>
+  </view>
+
+</view>

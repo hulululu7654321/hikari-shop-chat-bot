@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "买家画像",
+  "navigationBarBackgroundColor": "#FFFFFF",
+  "navigationBarTextStyle": "black",
+  "enablePullDownRefresh": true,
+  "onReachBottomDistance": 100
+}

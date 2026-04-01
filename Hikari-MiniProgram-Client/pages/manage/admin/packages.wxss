@@ -1,0 +1,281 @@
+page { background: #F8FAFC; }
+.page { padding: 24rpx; min-height: 100vh; }
+
+.top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24rpx; }
+.page-desc { font-size: 26rpx; color: #94A3B8; }
+.add-btn {
+  padding: 14rpx 32rpx;
+  background: #1AAD19;
+  border-radius: 12rpx;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: bold;
+}
+
+.loading-tip, .empty-tip { text-align: center; padding: 80rpx; color: #CBD5E1; font-size: 28rpx; }
+
+.group { margin-bottom: 28rpx; }
+.group-title { font-size: 26rpx; color: #64748B; font-weight: bold; display: block; margin-bottom: 14rpx; padding-left: 4rpx; }
+
+.pkg-card {
+  background: #fff;
+  border-radius: 16rpx;
+  margin-bottom: 14rpx;
+  overflow: hidden;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+}
+.pkg-card.inactive { opacity: 0.55; }
+
+.pkg-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 28rpx 32rpx 20rpx;
+}
+.pkg-left { flex: 1; }
+.pkg-name-row { display: flex; align-items: center; gap: 12rpx; flex-wrap: wrap; margin-bottom: 8rpx; }
+.pkg-name  { font-size: 30rpx; font-weight: bold; color: #1E293B; }
+.pkg-type  {
+  font-size: 20rpx; padding: 4rpx 12rpx; border-radius: 6rpx;
+  display: inline-flex; align-items: center; justify-content: center;
+  align-self: center;
+}
+.pkg-type.store  { background: rgba(7,193,96,0.1);   color: #1AAD19; }
+.pkg-type.online { background: rgba(99,102,241,0.1); color: #6366f1; }
+.pkg-off { font-size: 20rpx; color: #94A3B8; }
+.pkg-desc { font-size: 24rpx; color: #94A3B8; display: block; margin-bottom: 10rpx; }
+.pkg-tags { display: flex; gap: 10rpx; flex-wrap: wrap; }
+.tag {
+  font-size: 20rpx; padding: 4rpx 12rpx; border-radius: 6rpx;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tag.blue   { background: rgba(99,102,241,0.08); color: #6366f1; }
+.tag.purple { background: rgba(168,85,247,0.08); color: #a855f7; }
+.tag.green  { background: rgba(26,173,25,0.08);  color: #1AAD19; }
+.tag.gray   { background: #F1F5F9; color: #64748B; }
+.pkg-price { font-size: 32rpx; font-weight: bold; color: #1AAD19; margin-left: 16rpx; flex-shrink: 0; }
+
+.pkg-toggle {
+  border-top: 2rpx solid #F1F5F9;
+  padding: 16rpx 32rpx;
+  text-align: right;
+}
+.toggle-text { font-size: 26rpx; font-weight: bold; }
+.toggle-text.red   { color: #EF4444; }
+.toggle-text.green { color: #1AAD19; }
+
+/* 弹窗：modal-box 自己滚动，不用 scroll-view 嵌套 input */
+/* 原因：scroll-view 内嵌 input 时微信有已知 placeholder 渲染 bug */
+.modal-mask {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 999;
+}
+.modal-box {
+  background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 40rpx 40rpx 60rpx;
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+.modal-title { font-size: 34rpx; font-weight: bold; color: #1E293B; display: block; margin-bottom: 36rpx; }
+.modal-scroll { display: block; }
+.form-row { margin-bottom: 40rpx; }
+.form-label { font-size: 26rpx; color: #64748B; display: block; margin-bottom: 16rpx; }
+.form-input {
+  width: 100%;
+  border-bottom: 2rpx solid #E2E8F0;
+  padding: 20rpx 0;
+  font-size: 30rpx;
+  color: #1E293B;
+  box-sizing: border-box;
+}
+.form-textarea {
+  width: 100%;
+  border-bottom: 2rpx solid #E2E8F0;
+  padding: 20rpx 0;
+  font-size: 30rpx;
+  color: #1E293B;
+  box-sizing: border-box;
+  min-height: 72rpx;
+  max-height: 120rpx;
+  line-height: 1.5;
+}
+.picker-row { display: flex; justify-content: space-between; padding: 20rpx 0; font-size: 30rpx; color: #1E293B; border-bottom: 2rpx solid #E2E8F0; }
+.arrow { color: #94A3B8; }
+.modal-btns { display: flex; gap: 16rpx; margin-top: 40rpx; }
+.modal-btn { flex:1; height: 88rpx; border-radius: 14rpx; display: flex; align-items: center; justify-content: center; font-size: 30rpx; font-weight: bold; }
+.modal-btn.cancel  { background: #F1F5F9; color: #64748B; }
+.modal-btn.confirm { background: #1AAD19; color: #fff; }
+.modal-btn.confirm.loading { background: #94A3B8; }
+
+/* ── [Shop] 套餐封面图 ── */
+.pkg-cover-wrap {
+  position: relative;
+  width: 100%;
+  height: 220rpx;
+  overflow: hidden;
+}
+.pkg-cover {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.img-count-badge {
+  position: absolute;
+  bottom: 12rpx;
+  right: 12rpx;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+/* ── [Shop] 分类标签 ── */
+.pkg-cat-row { margin-bottom: 8rpx; }
+.pkg-cat {
+  font-size: 20rpx;
+  color: #6366f1;
+  background: rgba(99,102,241,0.08);
+  padding: 4rpx 14rpx;
+  border-radius: 6rpx;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ── [Shop] 图片管理区 ── */
+.form-section { margin-bottom: 40rpx; }
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+.img-count-hint { font-size: 24rpx; color: #94A3B8; }
+
+.img-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+.img-thumb-wrap {
+  position: relative;
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 12rpx;
+  overflow: visible;
+}
+.img-thumb {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 12rpx;
+  display: block;
+  background: #F1F5F9;
+}
+.img-del-btn {
+  position: absolute;
+  top: -14rpx;
+  right: -14rpx;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 50%;
+  background: #EF4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.img-del-icon { color: #fff; font-size: 28rpx; line-height: 1; }
+
+.img-add-btn {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 12rpx;
+  border: 2rpx dashed #CBD5E1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  background: #F8FAFC;
+}
+.img-add-btn.uploading { opacity: 0.6; }
+.img-add-icon { font-size: 48rpx; color: #94A3B8; line-height: 1; }
+.img-add-text { font-size: 22rpx; color: #94A3B8; }
+
+.img-tip { font-size: 22rpx; color: #CBD5E1; display: block; margin-top: 16rpx; }
+
+/* 新增时的提示 */
+.form-hint-block { margin-bottom: 40rpx; }
+.form-hint { font-size: 24rpx; color: #CBD5E1; }
+
+/* modal-scroll 高度限制，留出按钮空间 */
+.modal-scroll { max-height: 65vh; }
+
+/* 提交中状态 */
+.modal-btn.confirm.btn-loading { background: #94A3B8; }
+
+/* ── [BuyerPortrait] 买家画像按钮行 ── */
+.pkg-actions {
+  display: flex;
+  align-items: center;
+  border-top: 2rpx solid #F1F5F9;
+  padding: 0 32rpx;
+  min-height: 80rpx;
+}
+.pkg-actions .pkg-toggle {
+  border-top: none;
+  padding: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.pkg-actions .pkg-toggle .toggle-text {
+  line-height: 1;
+}
+.pkg-buyer-btn {
+  padding: 14rpx 24rpx;
+  background: rgba(99,102,241,0.08);
+  border-radius: 10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+.buyer-btn-text {
+  font-size: 24rpx;
+  color: #6366f1;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* ── 已下架分区 ── */
+.empty-section-tip {
+  text-align: center;
+  padding: 24rpx;
+  color: #CBD5E1;
+  font-size: 24rpx;
+}
+.inactive-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 24rpx;
+  margin: 8rpx 0 4rpx;
+  background: #F8FAFC;
+  border-radius: 10rpx;
+}
+.inactive-header-text {
+  font-size: 24rpx;
+  color: #94A3B8;
+  font-weight: 500;
+}
+.inactive-arrow {
+  font-size: 20rpx;
+  color: #CBD5E1;
+}

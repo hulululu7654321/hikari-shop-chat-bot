@@ -1,0 +1,78 @@
+<view class="page">
+
+  <!-- 搜索+授权 -->
+  <view class="search-bar">
+    <input class="search-input" placeholder="搜索用户昵称" value="{{searchKw}}"
+           bindinput="onSearchInput" bindconfirm="searchUser" confirm-type="search" />
+    <view class="search-btn" bindtap="searchUser"><text>{{searching?'…':'搜索'}}</text></view>
+  </view>
+
+  <!-- 搜索结果（点击选择用户进入授权弹窗） -->
+  <view wx:if="{{searchResults.length>0}}" class="search-results">
+    <view wx:for="{{searchResults}}" wx:key="user_id" class="search-item"
+          bindtap="pickUser" data-uid="{{item.user_id}}" data-name="{{item.user_name}}">
+      <text class="s-name">{{item.user_name || '匿名Coser'}}</text>
+      <text class="s-hint">点击授权 ›</text>
+    </view>
+  </view>
+
+  <!-- 当前有权限用户列表 -->
+  <text class="section-title">已授权账号（{{list.length}}）</text>
+  <view wx:if="{{loading}}" class="loading-tip"><text>加载中…</text></view>
+  <view wx:elif="{{list.length===0}}" class="empty-tip"><text>暂无已授权账号</text></view>
+
+  <view wx:for="{{list}}" wx:key="user_id" class="role-card">
+    <view class="role-info">
+      <text class="role-name">{{item.user_name || item.user_id}}</text>
+      <text class="role-badge {{item.manage_role}}">{{item.manage_role==='admin'?'管理员':'店员'}}</text>
+      <text wx:if="{{item.store_name}}" class="role-store">{{item.store_name}}</text>
+    </view>
+    <view class="role-meta">
+      <text>授权于 {{item.granted_at_fmt || '—'}}</text>
+    </view>
+    <view class="revoke-btn" bindtap="revokeRole"
+          data-uid="{{item.user_id}}" data-name="{{item.user_name}}">
+      <text>撤销</text>
+    </view>
+  </view>
+
+  <!-- 授权弹窗 -->
+  <view wx:if="{{showModal}}" class="modal-mask" bindtap="closeModal">
+    <view class="modal-box" catchtap="noop">
+      <text class="modal-title">授权管理角色</text>
+      <view class="form-row">
+        <text class="form-label">角色</text>
+        <picker range="{{roleLabels}}" value="{{roleIndex}}" bindchange="onRoleChange">
+          <view class="picker-row">
+            <text>{{roleLabels[roleIndex]}}</text><text class="arrow">▼</text>
+          </view>
+        </picker>
+      </view>
+      <!-- [Fix] 店铺选择：从接口拉取店铺列表，替代手填 store_id -->
+      <view wx:if="{{form.role==='store_clerk'}}" class="form-row">
+        <text class="form-label">绑定店铺</text>
+        <block wx:if="{{storesLoading}}">
+          <text class="form-hint">加载中…</text>
+        </block>
+        <block wx:elif="{{storeLabels.length === 0}}">
+          <text class="form-hint">暂无店铺，请先创建店铺</text>
+        </block>
+        <picker wx:else
+          range="{{storeLabels}}" value="{{storeIndex}}"
+          bindchange="onStoreChange">
+          <view class="picker-row">
+            <text>{{storeLabels[storeIndex] || '请选择店铺'}}</text>
+            <text class="arrow">▼</text>
+          </view>
+        </picker>
+      </view>
+      <view class="modal-btns">
+        <view class="modal-btn cancel" bindtap="closeModal"><text>取消</text></view>
+        <view class="modal-btn confirm {{submitting?'loading':''}}" bindtap="grantRole">
+          <text>{{submitting?'授权中…':'确认授权'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+</view>

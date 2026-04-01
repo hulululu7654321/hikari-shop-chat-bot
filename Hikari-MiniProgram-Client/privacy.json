@@ -1,0 +1,16 @@
+{
+  "declarations": [
+    {
+      "key": "AlbumWriteOnly",
+      "title": "相册（写入）权限",
+      "data": "你上传的图片",
+      "purpose": "用于上传图片与希卡莉互动"
+    },
+    {
+      "key": "UserChooseAlbum",
+      "title": "相册访问权限",
+      "data": "你选择的图片",
+      "purpose": "用于上传图片与希卡莉互动"
+    }
+  ]
+}

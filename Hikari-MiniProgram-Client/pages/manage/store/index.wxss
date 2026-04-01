@@ -1,0 +1,199 @@
+page { background: #F8FAFC; }
+
+.page { min-height: 100vh; }
+
+/* Tab 导航 */
+.tab-bar {
+  display: flex;
+  background: #fff;
+  border-bottom: 2rpx solid #E2E8F0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx 0;
+  font-size: 28rpx;
+  color: #64748B;
+}
+
+.tab.active {
+  color: #07C160;
+  border-bottom: 4rpx solid #07C160;
+  font-weight: bold;
+}
+
+.tab-content { padding: 24rpx; }
+
+/* 刷新行 */
+.refresh-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.section-title { font-size: 28rpx; color: #475569; font-weight: bold; }
+
+.refresh-btn {
+  padding: 10rpx 28rpx;
+  background: #F1F5F9;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  color: #64748B;
+}
+
+/* 客户卡片 */
+.customer-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx 32rpx;
+  margin-bottom: 16rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+}
+
+.customer-info { display: flex; align-items: center; gap: 16rpx; flex-wrap: wrap; }
+.customer-name { font-size: 32rpx; font-weight: bold; color: #1E293B; }
+.customer-aff  { font-size: 26rpx; color: #94A3B8; }
+.vip-tag {
+  font-size: 22rpx; font-weight: bold;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  padding: 2rpx 12rpx;
+  border-radius: 6rpx;
+}
+.action-text { font-size: 28rpx; color: #07C160; }
+
+/* 下单表单 */
+.form-section {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx 32rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+}
+
+.form-label {
+  display: block;
+  font-size: 26rpx;
+  color: #64748B;
+  margin-bottom: 16rpx;
+  font-weight: bold;
+}
+
+.selected-user {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.selected-name { font-size: 30rpx; color: #1E293B; font-weight: bold; }
+.clear-btn {
+  padding: 8rpx 24rpx;
+  background: #F1F5F9;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  color: #64748B;
+}
+
+.no-user-tip {
+  font-size: 28rpx;
+  color: #07C160;
+  padding: 8rpx 0;
+}
+
+/* 套餐选项 */
+.pkg-item {
+  padding: 24rpx;
+  border: 2rpx solid #E2E8F0;
+  border-radius: 12rpx;
+  margin-bottom: 12rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pkg-item.selected {
+  border-color: #07C160;
+  background: rgba(7,193,96,0.04);
+}
+.pkg-info { flex: 1; }
+.pkg-name { font-size: 30rpx; color: #1E293B; font-weight: bold; display: block; margin-bottom: 4rpx; }
+.pkg-desc { font-size: 24rpx; color: #94A3B8; display: block; }
+.pkg-badge {
+  display: inline-block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #6366f1;
+  background: rgba(99,102,241,0.08);
+  padding: 2rpx 12rpx;
+  border-radius: 6rpx;
+}
+.pkg-price { font-size: 32rpx; font-weight: bold; color: #07C160; margin-left: 16rpx; }
+
+/* 支付方式 */
+.picker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 30rpx;
+  color: #1E293B;
+}
+.arrow { color: #94A3B8; font-size: 24rpx; }
+
+/* 备注输入 */
+.note-input {
+  width: 100%;
+  font-size: 28rpx;
+  color: #1E293B;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+/* 提交按钮 */
+.submit-btn {
+  width: 100%;
+  border-radius: 16rpx;
+  height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  font-weight: bold;
+  margin-top: 8rpx;
+}
+.submit-btn.active  { background: #07C160; color: #fff; box-shadow: 0 8rpx 24rpx rgba(7,193,96,0.3); }
+.submit-btn.disabled { background: #E2E8F0; color: #94A3B8; }
+
+/* 订单卡片 */
+.order-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx 32rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+}
+.order-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+.order-pkg   { font-size: 30rpx; font-weight: bold; color: #1E293B; }
+.order-price { font-size: 30rpx; font-weight: bold; color: #07C160; }
+.order-bottom { display: flex; gap: 16rpx; flex-wrap: wrap; align-items: center; }
+.order-time  { font-size: 24rpx; color: #94A3B8; }
+.order-pay   { font-size: 24rpx; color: #64748B; }
+.order-note  { font-size: 24rpx; color: #94A3B8; }
+
+/* 空状态 */
+.empty-tip {
+  text-align: center;
+  padding: 80rpx 0;
+  font-size: 28rpx;
+  color: #CBD5E1;
+}

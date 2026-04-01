@@ -1,0 +1,254 @@
+/* pages/checkin/checkin.wxss
+   调性与 chat 页保持一致：深色科技感 + 微信绿主色 */
+
+page {
+  background: #0F172A;
+  height: 100%;
+}
+
+.checkin-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0F172A;
+  box-sizing: border-box;
+}
+
+/* 顶部栏 */
+.top-bar {
+  width: 100%;
+  background: #1E293B;
+  border-bottom: 2rpx solid #07C160;
+  padding: 28rpx 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.top-bar-title {
+  font-size: 28rpx;
+  color: #E2E8F0;
+  font-weight: bold;
+  letter-spacing: 2rpx;
+}
+.top-bar-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #07C160;
+  box-shadow: 0 0 12rpx rgba(7, 193, 96, 0.6);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* 主体 */
+.main-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 60rpx;
+  box-sizing: border-box;
+}
+
+/* 头像环 */
+.avatar-ring {
+  position: relative;
+  width: 220rpx;
+  height: 220rpx;
+  margin-bottom: 60rpx;
+}
+.hikari-avatar {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  border: 4rpx solid #1E293B;
+}
+
+/* 旋转环（加载中） */
+.ring-spin {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: 4rpx solid transparent;
+  border-top-color: #07C160;
+  animation: spin 1.2s linear infinite;
+}
+/* 成功环 */
+.ring-success {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: 4rpx solid #07C160;
+  box-shadow: 0 0 24rpx rgba(7, 193, 96, 0.4);
+  animation: glow-ring 2s ease-in-out infinite;
+}
+/* 新客户环 */
+.ring-new {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: 4rpx solid #F59E0B;
+  box-shadow: 0 0 24rpx rgba(245, 158, 11, 0.4);
+  animation: glow-ring-amber 2s ease-in-out infinite;
+}
+/* 错误环 */
+.ring-error {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: 4rpx solid #EF4444;
+}
+
+/* 文字 */
+.status-title {
+  font-size: 36rpx;
+  color: #F1F5F9;
+  font-weight: bold;
+  text-align: center;
+  line-height: 1.5;
+  margin-bottom: 16rpx;
+  padding: 0 20rpx;
+}
+.status-sub {
+  font-size: 24rpx;
+  color: #64748B;
+  text-align: center;
+  margin-bottom: 60rpx;
+  letter-spacing: 1rpx;
+}
+
+/* 信息卡片 */
+.info-card {
+  width: 100%;
+  background: #1E293B;
+  border-radius: 20rpx;
+  padding: 36rpx 40rpx;
+  box-sizing: border-box;
+  border: 1rpx solid #334155;
+  margin-bottom: 60rpx;
+}
+.new-card {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.08);
+}
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.info-divider {
+  height: 1rpx;
+  background: #334155;
+  margin: 24rpx 0;
+}
+.info-label {
+  font-size: 24rpx;
+  color: #64748B;
+  font-weight: 500;
+}
+.info-value {
+  font-size: 28rpx;
+  color: #E2E8F0;
+  font-weight: bold;
+}
+.status-badge {
+  display: flex;
+  align-items: center;
+  background: rgba(7, 193, 96, 0.15);
+  border: 1rpx solid rgba(7, 193, 96, 0.3);
+  border-radius: 30rpx;
+  padding: 6rpx 20rpx;
+}
+.badge-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #07C160;
+  margin-right: 10rpx;
+  animation: pulse-dot 2s infinite;
+}
+.badge-text {
+  font-size: 22rpx;
+  color: #07C160;
+  font-weight: bold;
+}
+.new-tip {
+  font-size: 26rpx;
+  color: #F59E0B;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* 按钮 */
+.btn-primary {
+  width: 100%;
+  height: 96rpx;
+  background: #07C160;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 32rpx rgba(7, 193, 96, 0.35);
+}
+.btn-primary text {
+  font-size: 32rpx;
+  color: #FFFFFF;
+  font-weight: bold;
+  letter-spacing: 2rpx;
+}
+.btn-secondary {
+  width: 100%;
+  height: 96rpx;
+  background: transparent;
+  border: 2rpx solid #334155;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-secondary text {
+  font-size: 32rpx;
+  color: #64748B;
+  font-weight: 500;
+}
+
+/* 底部装饰 */
+.bottom-deco {
+  padding: 40rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+.deco-text {
+  font-size: 18rpx;
+  color: #1E293B;
+  letter-spacing: 3rpx;
+}
+
+/* 动画 */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(1.3); }
+}
+@keyframes glow-ring {
+  0%, 100% { box-shadow: 0 0 16rpx rgba(7, 193, 96, 0.3); }
+  50%       { box-shadow: 0 0 40rpx rgba(7, 193, 96, 0.7); }
+}
+@keyframes glow-ring-amber {
+  0%, 100% { box-shadow: 0 0 16rpx rgba(245, 158, 11, 0.3); }
+  50%       { box-shadow: 0 0 40rpx rgba(245, 158, 11, 0.7); }
+}

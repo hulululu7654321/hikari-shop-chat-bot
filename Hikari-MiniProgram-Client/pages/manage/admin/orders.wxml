@@ -1,0 +1,31 @@
+<view class="page">
+  <view class="filter-bar">
+    <input class="filter-input date-input" placeholder="日期 YYYYMMDD" value="{{dateFilter}}" bindinput="onDateInput" />
+    <picker class="store-picker" range="{{storeLabels}}" value="{{storeIndex}}" bindchange="onStorePickerChange">
+      <view class="store-picker-inner">
+        <text class="store-picker-text">{{storeLabels[storeIndex] || '全部店铺'}}</text>
+        <text class="store-picker-arrow">▼</text>
+      </view>
+    </picker>
+    <view class="search-btn" bindtap="doSearch"><text>查询</text></view>
+  </view>
+  <text class="list-count">共 {{orders.length}} 笔</text>
+  <view wx:if="{{loading}}" class="loading-tip"><text>加载中…</text></view>
+  <view wx:elif="{{orders.length===0}}" class="empty-tip"><text>暂无订单</text></view>
+  <view wx:for="{{orders}}" wx:key="order_id" class="order-card">
+    <view class="order-top">
+      <text class="order-pkg">{{item.package_name}}</text>
+      <text class="order-price">¥{{item.amount}}</text>
+    </view>
+    <view class="order-mid">
+      <text class="tag {{item.package_type==='online'?'purple':'green'}}">{{item.package_type==='online'?'线上VIP':'到店'}}</text>
+      <text class="order-store">{{item.store_name}}</text>
+      <text class="order-buyer">👤 {{item.user_name}}</text>
+    </view>
+    <view class="order-bottom">
+      <text class="order-time">{{item.created_at_fmt}}</text>
+      <text class="order-pay">{{item.payment_method}}</text>
+      <text wx:if="{{item.note}}" class="order-note">{{item.note}}</text>
+    </view>
+  </view>
+</view>

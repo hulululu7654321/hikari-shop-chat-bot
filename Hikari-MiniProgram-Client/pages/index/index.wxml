@@ -1,0 +1,8 @@
+<view class="gateway-container">
+  <view class="status-box">
+    <image class="gateway-avatar" src="/assets/images/hikari.png" mode="aspectFill" />
+    <!-- [Fix-F3] isConnecting 未定义，改用 isNavigating 取反：跳转前持续显示加载环 -->
+    <view class="loading-ring" wx:if="{{!isNavigating}}"></view>
+    <text class="status-text">{{statusText}}</text>
+  </view>
+</view>

@@ -1,0 +1,57 @@
+# =====================================================================
+# 希卡莉 (Hikari) - hikari-shop 容器（最轻量）
+# 路由：/api/p/（Nginx 转发）
+# 端口：8001
+# 纯读无状态：只需 Web 框架 + MongoDB 驱动，方便 CDN，独立变现
+# =====================================================================
+
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    TZ=Asia/Shanghai \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN (if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources; \
+    fi) && \
+    apt-get update -y && \
+    apt-get install -y --no-install-recommends \
+        curl tzdata \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 最轻量依赖
+COPY requirements.shop.txt requirements.txt
+RUN pip install --no-cache-dir -U pip -i https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+RUN useradd -r -u 1001 -g root hikari && \
+    mkdir -p /app/assets/packages && \
+    chown -R hikari:root /app/assets/packages && \
+    chmod -R 750 /app/assets/packages
+
+# 按重构文档第十节：hikari-shop 只需 database + logger + public 模块
+COPY src/utils/database.py      src/utils/
+COPY src/utils/logger.py        src/utils/
+COPY src/modules/public/        src/modules/public/
+
+RUN touch src/__init__.py \
+         src/utils/__init__.py \
+         src/modules/__init__.py
+
+EXPOSE 8001
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8001/api/sys/health || exit 1
+
+USER hikari
+
+CMD ["gunicorn", "src.modules.public.app:app", \
+     "-w", "2", \
+     "-k", "uvicorn.workers.UvicornWorker", \
+     "-b", "0.0.0.0:8001", \
+     "--timeout", "30"]

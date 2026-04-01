@@ -1,0 +1,97 @@
+# ============================
+# 环境与缓存
+# ============================
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+node_modules/
+
+# ============================
+# 模型权重（不打包进镜像）
+# ============================
+checkpoints/
+weights/
+models/
+pretrained_models/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.onnx
+GPT-SoVITS/
+
+# ============================
+# 大型资产（运行时 bind mount 挂入）
+# ============================
+assets/voices/
+assets/uploads/
+assets/live2d/
+assets/live2d_background/
+assets/samples/
+exports/
+logs/
+data/
+
+# ============================
+# Bot运行时数据
+# ============================
+napcat_data/
+astrbot_data/
+astrbot/
+
+# ============================
+# 敏感文件
+# ============================
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.crt
+deployment/certs/
+deployment/ssl/
+deployment/store_shops.json
+需要添加进环境变量.txt
+astrbot.安全备份yml
+astrbot.yml
+
+# ============================
+# 前端小程序（不进后端镜像）
+# ============================
+Hikari-MiniProgram-Client/
+
+# ============================
+# 开发测试与文档
+# ============================
+tests/
+.claude/
+*.md
+*.txt
+*.bak
+*.log
+*.tmp
+*.zip
+*.tar.gz
+*.rar
+
+# ============================
+# Git与CI
+# ============================
+.git/
+.gitignore
+.dockerignore
+
+# ============================
+# IDE / 系统文件
+# ============================
+.DS_Store
+.idea/
+.vscode/
+*.swp
+Thumbs.db

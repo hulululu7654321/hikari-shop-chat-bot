@@ -1,0 +1,18 @@
+<view class="report-page">
+  <view class="tech-header">
+    <text class="title">🐾 希卡莉的深度观察报告</text>
+    <text class="subtitle">DEEP MEMOIR ANALYSIS v4.0</text>
+  </view>
+
+  <scroll-view class="content-scroll" scroll-y="true">
+    <view class="markdown-body">
+      <text user-select="true">{{reportContent}}</text>
+    </view>
+    <view class="bottom-pad"></view>
+  </scroll-view>
+
+  <view class="action-bar">
+    <view class="btn-copy" bindtap="copyReport">复制全文</view>
+    <view class="btn-back" bindtap="goBack">返回终端</view>
+  </view>
+</view>

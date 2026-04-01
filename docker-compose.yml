@@ -1,0 +1,661 @@
+# =====================================================================
+# 希卡莉 (Hikari) - 重构版 docker-compose.yml
+# 基于：重构参考文档 MASTER v3.0
+# 架构：模块化单体 + Temporal 任务编排 + Qdrant 向量检索
+#
+# 容器清单（按重构文档第十二节锁定）：
+#   基础设施：ntp / init / mongodb / redis / postgres / es / qdrant
+#   Temporal：temporal / temporal-ui
+#   应用层：  api / worker / shop / imagegen / makeup / copywriting
+#   辅助：    lark-mcp / nginx
+#
+# 内存预算（8GB 宿主机）：
+#   mongodb 768m / redis 128m / postgres 256m / es 768m / qdrant 512m
+#   temporal 512m / temporal-ui 128m / api 768m / worker 1024m
+#   shop 256m / imagegen 512m / makeup 512m / copywriting 512m
+#   nginx 128m / lark-mcp 128m / ntp 64m ≈ 合计 ~7.4GB
+#
+# 初期建议：makeup 和 copywriting 暂不独立启动（内存紧张），
+#   待服务器升级到 16GB 后再开启独立容器。
+#
+# 端口分配（对外只暴露 Nginx 80/443，Temporal UI 127.0.0.1:8233）：
+#   hikari-api:         8000
+#   hikari-shop:        8001
+#   hikari-imagegen:    8002
+#   hikari-makeup:      8003
+#   hikari-copywriting: 8004
+#   新增工具从 8005 开始递增
+# =====================================================================
+
+services:
+
+  # ==================================================================
+  # 阶段 0：基础准备（ntp + init，所有服务的前置依赖）
+  # ==================================================================
+
+  # --- 0a. NTP 时间同步：宿主机关机漂移修复 ---
+  hikari-ntp:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/busybox:latest
+    container_name: hikari-ntp
+    restart: "no"
+    cap_add:
+      - SYS_TIME
+    command: >
+      sh -c "
+        echo '[ntp] 正在对齐阿里云 NTP...' &&
+        ntpd -d -q -p ntp1.aliyun.com 2>&1 | tail -1 &&
+        echo '[ntp] 时间对齐完成:' $(date '+%Y-%m-%d %H:%M:%S %Z')
+      "
+    network_mode: host
+
+  # --- 0b. 初始化：确保 bind mount 目录存在 ---
+  hikari-init:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/busybox:latest
+    container_name: hikari-init
+    restart: "no"
+    depends_on:
+      hikari-ntp:
+        condition: service_completed_successfully
+    volumes:
+      - ./data/mongo/db:/data/mongo/db
+      - ./data/mongo/config:/data/mongo/config
+      - ./data/redis:/data/redis
+      - ./data/postgres:/data/postgres
+      - ./data/qdrant:/data/qdrant
+      - ./data/es:/data/es
+      - ./assets/voices:/assets/voices
+      - ./assets/uploads:/assets/uploads
+      - ./assets/live2d:/assets/live2d
+      - ./assets/packages:/assets/packages
+      - ./logs:/logs
+      - ./exports:/exports
+    command: >
+      sh -c "
+        mkdir -p /data/mongo/db /data/mongo/config /data/redis /data/postgres /data/qdrant /data/es &&
+        chmod 777 /data/mongo/db /data/mongo/config /data/redis /data/postgres /data/qdrant /data/es &&
+        mkdir -p /assets/voices /assets/uploads /assets/live2d /assets/packages /logs /exports &&
+        chmod 777 /assets/voices /assets/uploads /assets/live2d /assets/packages /logs /exports &&
+        echo '[init] 全部目录就绪'
+      "
+
+  # ==================================================================
+  # 阶段 1：存储层（MongoDB / Redis / PostgreSQL / Qdrant / ES）
+  # ==================================================================
+
+  # --- 1a. MongoDB：主业务数据库 ---
+  hikari-mongodb:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/mongo:7.0.30
+    container_name: hikari-mongodb
+    restart: always
+    depends_on:
+      hikari-init:
+        condition: service_completed_successfully
+    command: ["--wiredTigerCacheSizeGB=1.5"]
+    environment:
+      - TZ=Asia/Shanghai
+      - MONGO_INITDB_ROOT_USERNAME=hikari_admin
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}
+    ports:
+      - "127.0.0.1:27018:27017"
+    volumes:
+      - ./data/mongo/db:/data/db
+      - ./data/mongo/config:/data/configdb
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+    healthcheck:
+      test: ["CMD", "mongosh", "-u", "hikari_admin", "-p", "${MONGODB_PASSWORD}",
+             "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- 1b. Redis：缓存 + Stream 消息路由 ---
+  hikari-redis:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/redis:7.0.14
+    container_name: hikari-redis
+    restart: always
+    depends_on:
+      hikari-init:
+        condition: service_completed_successfully
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data/redis:/data
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- 1c. PostgreSQL：Temporal 持久化后端（官方推荐生产配置）---
+  hikari-postgres:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:16-alpine
+    container_name: hikari-postgres
+    restart: always
+    depends_on:
+      hikari-init:
+        condition: service_completed_successfully
+    environment:
+      - TZ=Asia/Shanghai
+      - POSTGRES_USER=hikari
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=temporal
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hikari -d temporal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- 1d. Qdrant：向量检索（替换 Python 层余弦计算）---
+  hikari-qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: hikari-qdrant
+    restart: always
+    depends_on:
+      hikari-init:
+        condition: service_completed_successfully
+    environment:
+      - TZ=Asia/Shanghai
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - ./data/qdrant:/qdrant/storage
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' 2>/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # --- 1e. Elasticsearch + IK 中文分词 ---
+  hikari-es:
+    build:
+      context: .
+      dockerfile: Dockerfile.es
+    image: hikari-es-ik:8.13.0
+    container_name: hikari-es
+    restart: always
+    depends_on:
+      hikari-init:
+        condition: service_completed_successfully
+    environment:
+      - TZ=Asia/Shanghai
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms256m -Xmx512m
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    volumes:
+      - ./data/es:/usr/share/elasticsearch/data
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ==================================================================
+  # 阶段 2：Temporal 任务编排
+  # ==================================================================
+
+  # --- 2a. Temporal Server（auto-setup 自动建库建表）---
+  hikari-temporal:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/temporalio/auto-setup:1.29.2
+    container_name: hikari-temporal
+    restart: always
+    depends_on:
+      hikari-postgres:
+        condition: service_healthy
+    environment:
+      - TZ=Asia/Shanghai
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=hikari
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=hikari-postgres
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - BIND_ON_IP=0.0.0.0
+      - TEMPORAL_ADDRESS=0.0.0.0:7233
+    volumes:
+      - ./deployment/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "temporal operator cluster health --address 0.0.0.0:7233 2>/dev/null | grep -q SERVING || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # --- 2b. Temporal UI（Dashboard，仅 127.0.0.1 本地访问，SSH 隧道）---
+  hikari-temporal-ui:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/temporalio/ui:2.44.0
+    container_name: hikari-temporal-ui
+    restart: always
+    depends_on:
+      hikari-temporal:
+        condition: service_healthy
+    environment:
+      - TZ=Asia/Shanghai
+      - TEMPORAL_ADDRESS=hikari-temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:8233
+    ports:
+      - "127.0.0.1:8233:8080"
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  # ==================================================================
+  # 阶段 3：应用层（api / worker / 各工具容器）
+  # ==================================================================
+
+  # 公共健康依赖锚（所有应用容器共用，避免重复书写）
+  # 应用层全部依赖：mongodb + redis + temporal
+
+  # --- 3a. hikari-api：主服务（HTTP + WebSocket 路由）---
+  hikari-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hikari-api
+    restart: always
+    depends_on:
+      hikari-mongodb:  { condition: service_healthy }
+      hikari-redis:    { condition: service_healthy }
+      hikari-qdrant:   { condition: service_healthy }
+      hikari-temporal: { condition: service_healthy }
+      hikari-es:       { condition: service_healthy }
+    env_file: .env
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      - APP_ENVIRONMENT=production
+      # 敏感密钥从宿主机环境变量透传
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_ENCRYPTION_KEY=${REDIS_ENCRYPTION_KEY}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - HIKARI_SKILL_KEY=${HIKARI_SKILL_KEY}
+      # 多店 key 透传（新增分店时在此追加）
+      - STORE_KEY_001=${STORE_KEY_001}
+      - STORE_KEY_002=${STORE_KEY_002}
+    # 入口：hikari-api 容器只跑 HTTP/WS 服务
+    command: gunicorn src.main:app -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000 --timeout 120
+    volumes:
+      - ./assets/samples:/app/assets/samples:ro
+      - ./assets/voices:/app/assets/voices:rw
+      - ./assets/uploads:/app/assets/uploads:rw
+      - ./assets/packages:/app/assets/packages:rw
+      - ./logs:/app/logs:rw
+      - ./exports:/app/exports:rw
+      - ./deployment/store_shops.json:/app/deployment/store_shops.json:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+
+  # --- 3b. hikari-worker：Temporal Worker（异步任务执行）---
+  # 同 Dockerfile，入口不同。按环境变量开关注册 Workflow。
+  hikari-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hikari-worker
+    restart: always
+    depends_on:
+      hikari-mongodb:  { condition: service_healthy }
+      hikari-redis:    { condition: service_healthy }
+      hikari-qdrant:   { condition: service_healthy }
+      hikari-temporal: { condition: service_healthy }
+      hikari-es:       { condition: service_healthy }
+    env_file: .env
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      - APP_ENVIRONMENT=production
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_ENCRYPTION_KEY=${REDIS_ENCRYPTION_KEY}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - HIKARI_SKILL_KEY=${HIKARI_SKILL_KEY}
+      - STORE_KEY_001=${STORE_KEY_001}
+      - STORE_KEY_002=${STORE_KEY_002}
+      # Workflow 开关（false=关闭注册，删除功能时改此值，不改代码）
+      - ENABLE_WORKFLOW_IMAGEGEN=${ENABLE_WORKFLOW_IMAGEGEN:-true}
+      - ENABLE_WORKFLOW_VOICE=${ENABLE_WORKFLOW_VOICE:-true}
+      - ENABLE_WORKFLOW_MAKEUP=${ENABLE_WORKFLOW_MAKEUP:-true}
+      - ENABLE_WORKFLOW_COPYWRITING=${ENABLE_WORKFLOW_COPYWRITING:-true}
+      - ENABLE_WORKFLOW_PUSH=${ENABLE_WORKFLOW_PUSH:-true}
+      - ENABLE_WORKFLOW_HEALTH=${ENABLE_WORKFLOW_HEALTH:-true}
+    # 入口：Temporal Worker，src/worker_main.py
+    command: python -m src.worker_main
+    volumes:
+      - ./assets/samples:/app/assets/samples:ro
+      - ./assets/voices:/app/assets/voices:rw
+      - ./assets/uploads:/app/assets/uploads:rw
+      - ./assets/packages:/app/assets/packages:rw
+      - ./logs:/app/logs:rw
+      - ./exports:/app/exports:rw
+      - ./deployment/store_shops.json:/app/deployment/store_shops.json:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+  # --- 3c. hikari-shop：公开商城（纯读无状态，hikari-shop 独立容器）---
+  hikari-shop:
+    build:
+      context: .
+      dockerfile: Dockerfile.shop
+    container_name: hikari-shop
+    restart: always
+    depends_on:
+      hikari-mongodb: { condition: service_healthy }
+    env_file: .env
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - SHOP_NAME=${SHOP_NAME:-希卡莉经纪事务所}
+      - SHOP_SLOGAN=${SHOP_SLOGAN:-专属 coser 的 AI 伴侣 · 线上线下一体服务}
+      - SHOP_CONTACT_WECHAT=${SHOP_CONTACT_WECHAT:-}
+      - SHOP_CONTACT_NOTE=${SHOP_CONTACT_NOTE:-}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
+    command: gunicorn src.modules.public.app:app -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8001 --timeout 30
+    volumes:
+      - ./assets/packages:/app/assets/packages:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+
+  # --- 3d. hikari-imagegen：图生图工具容器 ---
+  # 注：内存紧张时可暂停此容器，功能由 hikari-api 兜底（nginx 注释对应 location 即可）
+  hikari-imagegen:
+    build:
+      context: .
+      dockerfile: Dockerfile.imagegen
+    container_name: hikari-imagegen
+    restart: always
+    depends_on:
+      hikari-mongodb: { condition: service_healthy }
+      hikari-redis:   { condition: service_healthy }
+      hikari-temporal: { condition: service_healthy }
+    env_file: .env
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SEEDREAM_EP=${SEEDREAM_EP:-}
+      - VIP_LOCK_IMAGE_GEN=${VIP_LOCK_IMAGE_GEN:-true}
+      - IMAGE_GEN_QUOTA_VIP=${IMAGE_GEN_QUOTA_VIP:-30}
+      - IMAGE_GEN_QUOTA_SVIP=${IMAGE_GEN_QUOTA_SVIP:-60}
+    command: gunicorn src.modules.tools.imagegen.api:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8002 --timeout 180
+    volumes:
+      - ./assets/uploads:/app/assets/uploads:rw
+      - ./logs:/app/logs:rw
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+  # --- 3e. hikari-makeup：美妆分析工具容器 ---
+  # 注：8GB 内存初期建议暂不启动，在 hikari-api 内跑。注释掉此服务即可，nginx 对应 location 同步注释。
+  hikari-makeup:
+    build:
+      context: .
+      dockerfile: Dockerfile.makeup
+    container_name: hikari-makeup
+    restart: always
+    depends_on:
+      hikari-mongodb: { condition: service_healthy }
+      hikari-redis:   { condition: service_healthy }
+      hikari-temporal: { condition: service_healthy }
+    env_file: .env
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - VIP_LOCK_MAKEUP=${VIP_LOCK_MAKEUP:-true}
+    command: gunicorn src.modules.tools.makeup.api:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8003 --timeout 120
+    volumes:
+      - ./assets/uploads:/app/assets/uploads:rw
+      - ./logs:/app/logs:rw
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+  # --- 3f. hikari-copywriting：文案生成工具容器 ---
+  # 注：8GB 内存初期建议暂不启动，在 hikari-api 内跑。注释掉此服务即可，nginx 对应 location 同步注释。
+  hikari-copywriting:
+    build:
+      context: .
+      dockerfile: Dockerfile.copywriting
+    container_name: hikari-copywriting
+    restart: always
+    depends_on:
+      hikari-mongodb: { condition: service_healthy }
+      hikari-redis:   { condition: service_healthy }
+      hikari-temporal: { condition: service_healthy }
+    env_file: .env
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - VIP_LOCK_COPYWRITING=${VIP_LOCK_COPYWRITING:-true}
+    command: gunicorn src.modules.tools.copywriting.api:app -w 1 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8004 --timeout 120
+    volumes:
+      - ./assets/uploads:/app/assets/uploads:ro
+      - ./logs:/app/logs:rw
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+
+  # ==================================================================
+  # 阶段 4：辅助服务（lark-mcp / nginx）
+  # ==================================================================
+
+  # --- 4a. 飞书 MCP（RAG 知识库同步，仅供 hikari-api 内网调用）---
+  hikari-lark-mcp:
+    image: node:22-alpine
+    container_name: hikari-lark-mcp
+    restart: unless-stopped
+    depends_on:
+      hikari-init:
+        condition: service_completed_successfully
+    environment:
+      - TZ=Asia/Shanghai
+      - FEISHU_APP_ID=${FEISHU_APP_ID:-placeholder}
+      - FEISHU_APP_SECRET=${FEISHU_APP_SECRET:-placeholder}
+    command: >
+      sh -c "npm install -g @larksuiteoapi/lark-mcp &&
+             lark-mcp mcp
+             -a $$FEISHU_APP_ID
+             -s $$FEISHU_APP_SECRET
+             -m sse
+             -p 3001
+             --host 0.0.0.0
+             -t preset.bitable.default,preset.doc.default"
+    ports:
+      - "127.0.0.1:3001:3001"
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  # --- 4b. Nginx：反向代理 + 静态资源（路由规则见 deployment/nginx.conf）---
+  hikari-nginx:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:1.28.1-alpine
+    container_name: hikari-nginx
+    restart: always
+    depends_on:
+      - hikari-api
+      - hikari-shop
+      - hikari-imagegen
+    ports:
+      - "80:80"
+      # - "443:443"  # HTTPS：备案域名就绪后启用
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./deployment/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./assets/voices:/app/assets/voices:ro
+      - ./assets/uploads:/app/assets/uploads:ro
+      - ./assets/packages:/app/assets/packages:ro
+      - ./assets/live2d:/app/assets/live2d:ro
+      - ./assets/live2d_background:/app/assets/live2d_background:ro
+      - ./deployment/store_screen.html:/usr/share/nginx/html/store_screen.html:ro
+      - ./deployment/checkin.html:/usr/share/nginx/html/checkin.html:ro
+      - ./deployment/static:/usr/share/nginx/html/static:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - hikari-net
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+# ==================================================================
+# 网络定义
+# ==================================================================
+networks:
+  hikari-net:
+    # 所有容器内网互通，对外只通过 Nginx 80/443 暴露
+    # 统一命名 hikari-net（原 hikari-network，按重构文档锁定）
+    driver: bridge
+
+# ==================================================================
+# 数据说明（全部使用 bind mount，不使用命名卷）
+# docker-compose down -v 不会删除任何业务数据
+# 备份只需打包 ./data/ 目录
+# ==================================================================
+#   MongoDB:    ./data/mongo/db/  ./data/mongo/config/
+#   Redis:      ./data/redis/
+#   PostgreSQL: ./data/postgres/
+#   Qdrant:     ./data/qdrant/
+#   ES:         ./data/es/

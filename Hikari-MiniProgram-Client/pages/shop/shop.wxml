@@ -1,0 +1,189 @@
+<view class="shop-page">
+
+  <!-- ── 顶部 Banner ── -->
+  <swiper class="banner" indicator-dots="{{false}}" autoplay circular interval="4000">
+    <swiper-item class="banner-item banner-placeholder">
+      <view class="banner-inner">
+        <view class="banner-logo">
+          <image class="banner-avatar" src="/assets/images/hikari.png" mode="aspectFill" />
+        </view>
+        <view class="banner-text-wrap">
+          <text class="banner-title">希卡莉经纪事务所</text>
+          <text class="banner-sub">专属 coser 的 AI 伴侣 · 线上线下一体服务</text>
+        </view>
+      </view>
+    </swiper-item>
+  </swiper>
+
+  <!-- ── 分类 Tab ── -->
+  <view class="category-wrap">
+    <scroll-view class="category-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="category-row">
+        <view
+          wx:for="{{categories}}"
+          wx:key="key"
+          class="cat-item {{currentCategory === item.key ? 'active' : ''}}"
+          bindtap="switchCategory"
+          data-key="{{item.key}}"
+          data-index="{{index}}"
+        >
+          <text class="cat-label">{{item.label}}</text>
+          <view class="cat-line" wx:if="{{currentCategory === item.key}}"></view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+
+  <!-- ── 套餐列表 ── -->
+  <view class="pkg-list">
+
+    <view wx:if="{{loading}}" class="loading-wrap">
+      <view wx:for="{{[1,2,3]}}" wx:key="index" class="skeleton-card">
+        <view class="skeleton-img"></view>
+        <view class="skeleton-body">
+          <view class="skeleton-line long"></view>
+          <view class="skeleton-line short"></view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:elif="{{packages.length === 0}}" class="empty-wrap">
+      <image class="empty-img" src="/assets/images/hikari.png" mode="aspectFit" />
+      <text class="empty-text">该分类暂无套餐喵～</text>
+    </view>
+
+    <view wx:else class="pkg-grid">
+      <view
+        wx:for="{{packages}}"
+        wx:key="package_id"
+        class="pkg-card"
+        bindtap="openDetail"
+        data-pkg="{{item}}"
+      >
+        <!-- 封面图 -->
+        <view class="pkg-img-wrap">
+          <image
+            wx:if="{{item.cover}}"
+            class="pkg-img"
+            src="{{item.cover}}"
+            mode="aspectFill"
+            lazy-load
+          />
+          <view wx:else class="pkg-img-placeholder">
+            <text class="placeholder-icon">🖼️</text>
+          </view>
+          <!-- 分类角标 -->
+          <view class="cat-badge">
+            <text class="cat-badge-text">{{item.categoryLabel}}</text>
+          </view>
+          <!-- 店铺角标 -->
+          <view wx:if="{{item.store_name}}" class="store-badge">
+            <text class="store-badge-text">📍{{item.store_name}}</text>
+          </view>
+          <!-- 多图角标 -->
+          <view wx:if="{{item.images.length > 1}}" class="multi-badge">
+            <text class="multi-badge-text">{{item.images.length}}张</text>
+          </view>
+        </view>
+
+        <!-- 信息区 -->
+        <view class="pkg-info">
+          <text class="pkg-name">{{item.name}}</text>
+          <text wx:if="{{item.description}}" class="pkg-desc">{{item.description}}</text>
+          <view class="pkg-bottom">
+            <text class="pkg-price">¥{{item.price}}</text>
+            <view class="pkg-tags">
+              <text wx:if="{{item.screen_minutes > 0}}" class="tag blue">屏幕互动 {{item.screen_minutes}}min</text>
+              <text wx:if="{{item.vip_days > 0}}" class="tag purple">VIP {{item.vip_days}}天</text>
+              <text wx:if="{{item.image_gen_quota > 0}}" class="tag green">生图 {{item.image_gen_quota}}次</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+  </view>
+
+  <!-- ── 底部入口 ── -->
+  <view class="bottom-bar" style="padding-bottom: {{bottomPad + 20}}rpx">
+    <view class="chat-btn" bindtap="goChat">
+      <text class="chat-btn-text">💬 开始和希卡莉聊天</text>
+    </view>
+  </view>
+
+  <!-- ── 套餐详情浮层 ── -->
+  <view wx:if="{{showDetail}}" class="detail-mask" bindtap="closeDetail">
+    <view class="detail-box" catchtap="noop">
+
+      <!-- 图片轮播 -->
+      <view class="detail-img-wrap">
+        <swiper
+          wx:if="{{detailPkg.images.length > 0}}"
+          class="detail-swiper"
+          indicator-dots="{{detailPkg.images.length > 1}}"
+          indicator-color="rgba(255,255,255,0.5)"
+          indicator-active-color="#ffffff"
+          circular
+          bindchange="onDetailImgChange"
+        >
+          <swiper-item
+            wx:for="{{detailPkg.images}}"
+            wx:key="index"
+            wx:for-item="imgUrl"
+          >
+            <image
+              class="detail-img"
+              src="{{imgUrl}}"
+              mode="aspectFill"
+              bindtap="previewImg"
+              data-urls="{{detailPkg.images}}"
+              data-current="{{imgUrl}}"
+            />
+          </swiper-item>
+        </swiper>
+        <view wx:else class="detail-img-empty">
+          <text class="placeholder-icon">🖼️</text>
+        </view>
+
+        <!-- 图片计数 -->
+        <view wx:if="{{detailPkg.images.length > 1}}" class="img-counter">
+          <text>{{detailImgIndex + 1}}/{{detailPkg.images.length}}</text>
+        </view>
+
+        <!-- 关闭按钮 -->
+        <view class="detail-close" bindtap="closeDetail">
+          <text class="close-icon">×</text>
+        </view>
+      </view>
+
+      <!-- 详情内容 -->
+      <view class="detail-content">
+        <view class="detail-header">
+          <view>
+            <text class="detail-name">{{detailPkg.name}}</text>
+            <view class="detail-badges">
+              <text class="cat-badge-text detail-cat">{{detailPkg.categoryLabel}}</text>
+              <text wx:if="{{detailPkg.store_name}}" class="store-badge-text detail-store">📍{{detailPkg.store_name}}</text>
+              <text wx:if="{{detailPkg.screen_minutes > 0}}" class="tag blue">屏幕互动 {{detailPkg.screen_minutes}}min</text>
+              <text wx:if="{{detailPkg.vip_days > 0}}" class="tag purple">VIP {{detailPkg.vip_days}}天</text>
+              <text wx:if="{{detailPkg.image_gen_quota > 0}}" class="tag green">生图 {{detailPkg.image_gen_quota}}次</text>
+              <text class="tag gray">好感度 +{{detailPkg.affinity_delta}}</text>
+            </view>
+          </view>
+          <text class="detail-price">¥{{detailPkg.price}}</text>
+        </view>
+
+        <text wx:if="{{detailPkg.description}}" class="detail-desc">{{detailPkg.description}}</text>
+
+        <!-- 操作按钮 -->
+        <view class="detail-btns">
+          <view class="btn-contact btn-full" bindtap="contactAdmin">
+            <text>联系管理员下单</text>
+          </view>
+        </view>
+      </view>
+
+    </view>
+  </view>
+
+</view>

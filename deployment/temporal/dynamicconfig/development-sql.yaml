@@ -1,0 +1,10 @@
+# Temporal dynamic config for SQL (PostgreSQL) backend
+# Minimal config required for single-node development/production setup
+
+limit.maxIDLength:
+  - value: 255
+    constraints: {}
+
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}

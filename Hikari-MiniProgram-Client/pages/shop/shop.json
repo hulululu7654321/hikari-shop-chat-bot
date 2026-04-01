@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "希卡莉商城",
+  "navigationBarBackgroundColor": "#ffffff",
+  "navigationBarTextStyle": "black",
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#F8FAFC",
+  "usingComponents": {}
+}

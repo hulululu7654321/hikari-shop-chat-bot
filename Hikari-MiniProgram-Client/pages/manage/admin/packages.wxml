@@ -1,0 +1,299 @@
+<view class="page">
+
+  <view class="top-bar">
+    <text class="page-desc">管理所有套餐，点击套餐可编辑</text>
+    <view class="add-btn" bindtap="openNew"><text>新增</text></view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-tip"><text>加载中…</text></view>
+  <view wx:elif="{{groups.length===0}}" class="empty-tip"><text>暂无套餐，点击「新增」创建</text></view>
+
+  <!-- 套餐列表（按店铺分组，上架/下架分区） -->
+  <view wx:for="{{groups}}" wx:key="store_id" class="group">
+    <text class="group-title">{{item.store_name}}</text>
+
+    <!-- 上架套餐 -->
+    <view wx:if="{{item.active.length === 0}}" class="empty-section-tip">
+      <text>暂无上架套餐</text>
+    </view>
+    <view wx:for="{{item.active}}" wx:key="package_id" wx:for-item="pkg"
+          class="pkg-card {{pkg.is_active?'':'inactive'}}">
+
+      <!-- 封面图 -->
+      <view wx:if="{{pkg.images && pkg.images.length > 0}}" class="pkg-cover-wrap">
+        <image class="pkg-cover" src="{{baseUrl + '/api/p/images/' + pkg.images[0]}}" mode="aspectFill" lazy-load="true" />
+        <view class="img-count-badge" wx:if="{{pkg.images.length > 1}}">
+          <text>{{pkg.images.length}}张</text>
+        </view>
+      </view>
+
+      <view class="pkg-main" bindtap="openEdit" data-pkg="{{pkg}}">
+        <view class="pkg-left">
+          <view class="pkg-name-row">
+            <text class="pkg-name">{{pkg.name}}</text>
+            <view class="pkg-type {{pkg.type}}">
+              <text>{{pkg.type==='online'?'线上VIP':'到店'}}</text>
+            </view>
+            <text wx:if="{{!pkg.is_active}}" class="pkg-off">已下架</text>
+          </view>
+          <view class="pkg-cat-row" wx:if="{{pkg.category && !(pkg.type==='online' && pkg.category==='online')}}">
+            <text class="pkg-cat">{{pkg.category==='photography'?'摄影':pkg.category==='costume'?'服装':pkg.category==='makeup'?'妆娘':pkg.category==='studio'?'场地':pkg.category==='activity'?'活动':pkg.category==='online'?'线上VIP':'其他'}}</text>
+          </view>
+          <text class="pkg-desc" wx:if="{{pkg.description}}">{{pkg.description}}</text>
+          <view class="pkg-tags">
+            <view wx:if="{{pkg.screen_minutes > 0}}" class="tag blue">
+              <text>屏幕 {{pkg.screen_minutes}}min</text>
+            </view>
+            <view wx:if="{{pkg.vip_days > 0}}" class="tag purple">
+              <text>{{pkg.vip_level === 2 ? 'SVIP' : 'VIP'}} {{pkg.vip_days}}天</text>
+            </view>
+            <view wx:if="{{pkg.image_gen_quota > 0}}" class="tag green">
+              <text>生图 {{pkg.image_gen_quota}}次</text>
+            </view>
+            <view class="tag gray">
+              <text>好感度 +{{pkg.affinity_delta}}</text>
+            </view>
+          </view>
+        </view>
+        <text class="pkg-price">¥{{pkg.price}}</text>
+      </view>
+
+      <view class="pkg-actions">
+        <view class="pkg-toggle" bindtap="toggleActive" data-pkg="{{pkg}}">
+          <text class="toggle-text {{pkg.is_active?'red':'green'}}">{{pkg.is_active?'下架':'上架'}}</text>
+        </view>
+        <view class="pkg-buyer-btn" bindtap="openBuyerProfiles" data-pkg="{{pkg}}">
+          <text class="buyer-btn-text">买家画像</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 已下架分区 -->
+    <view wx:if="{{item.inactive.length > 0}}"
+          class="inactive-header"
+          bindtap="toggleInactive"
+          data-store-id="{{item.store_id}}">
+      <text class="inactive-header-text">已下架（{{item.inactive.length}}）</text>
+      <text class="inactive-arrow">{{inactiveExpanded[item.store_id] ? '▲' : '▼'}}</text>
+    </view>
+    <view wx:if="{{item.inactive.length > 0 && inactiveExpanded[item.store_id]}}">
+    <view wx:for="{{item.inactive}}" wx:key="package_id" wx:for-item="pkg"
+          class="pkg-card {{pkg.is_active?'':'inactive'}}">
+
+      <!-- 封面图 -->
+      <view wx:if="{{pkg.images && pkg.images.length > 0}}" class="pkg-cover-wrap">
+        <image class="pkg-cover" src="{{baseUrl + '/api/p/images/' + pkg.images[0]}}" mode="aspectFill" lazy-load="true" />
+        <view class="img-count-badge" wx:if="{{pkg.images.length > 1}}">
+          <text>{{pkg.images.length}}张</text>
+        </view>
+      </view>
+
+      <view class="pkg-main" bindtap="openEdit" data-pkg="{{pkg}}">
+        <view class="pkg-left">
+          <view class="pkg-name-row">
+            <text class="pkg-name">{{pkg.name}}</text>
+            <view class="pkg-type {{pkg.type}}">
+              <text>{{pkg.type==='online'?'线上VIP':'到店'}}</text>
+            </view>
+            <text wx:if="{{!pkg.is_active}}" class="pkg-off">已下架</text>
+          </view>
+          <view class="pkg-cat-row" wx:if="{{pkg.category && !(pkg.type==='online' && pkg.category==='online')}}">
+            <text class="pkg-cat">{{pkg.category==='photography'?'摄影':pkg.category==='costume'?'服装':pkg.category==='makeup'?'妆娘':pkg.category==='studio'?'场地':pkg.category==='activity'?'活动':pkg.category==='online'?'线上VIP':'其他'}}</text>
+          </view>
+          <text class="pkg-desc" wx:if="{{pkg.description}}">{{pkg.description}}</text>
+          <view class="pkg-tags">
+            <view wx:if="{{pkg.screen_minutes > 0}}" class="tag blue">
+              <text>屏幕 {{pkg.screen_minutes}}min</text>
+            </view>
+            <view wx:if="{{pkg.vip_days > 0}}" class="tag purple">
+              <text>{{pkg.vip_level === 2 ? 'SVIP' : 'VIP'}} {{pkg.vip_days}}天</text>
+            </view>
+            <view wx:if="{{pkg.image_gen_quota > 0}}" class="tag green">
+              <text>生图 {{pkg.image_gen_quota}}次</text>
+            </view>
+            <view class="tag gray">
+              <text>好感度 +{{pkg.affinity_delta}}</text>
+            </view>
+          </view>
+        </view>
+        <text class="pkg-price">¥{{pkg.price}}</text>
+      </view>
+
+      <view class="pkg-actions">
+        <view class="pkg-toggle" bindtap="toggleActive" data-pkg="{{pkg}}">
+          <text class="toggle-text {{pkg.is_active?'red':'green'}}">{{pkg.is_active?'下架':'上架'}}</text>
+        </view>
+        <view class="pkg-buyer-btn" bindtap="openBuyerProfiles" data-pkg="{{pkg}}">
+          <text class="buyer-btn-text">买家画像</text>
+        </view>
+      </view>
+    </view>
+    </view>
+  </view>
+
+  <!-- 新增/编辑弹窗 -->
+  <view wx:if="{{showModal}}" class="modal-mask" bindtap="closeModal">
+    <view class="modal-box" catchtap="noop">
+      <text class="modal-title">{{editing ? '编辑套餐' : '新增套餐'}}</text>
+      <scroll-view class="modal-scroll" scroll-y="true">
+
+        <!-- 类型（仅新增时显示） -->
+        <view wx:if="{{!editing}}" class="form-row">
+          <text class="form-label">类型</text>
+          <picker range="{{typeLabels}}" value="{{typeIndex}}" bindchange="onTypeChange">
+            <view class="picker-row">
+              <text>{{typeLabels[typeIndex]}}</text>
+              <text class="arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+
+        <!-- 店铺（到店套餐 + 新增时显示） -->
+        <view wx:if="{{!editing && form.type==='store'}}" class="form-row">
+          <text class="form-label">店铺</text>
+          <text wx:if="{{storesLoading}}" class="form-hint">加载中…</text>
+          <text wx:elif="{{storeLabels.length === 0}}" class="form-hint">暂无店铺</text>
+          <picker wx:else range="{{storeLabels}}" value="{{storeIndex}}" bindchange="onStoreChange">
+            <view class="picker-row">
+              <text>{{storeLabels[storeIndex] || '请选择店铺'}}</text>
+              <text class="arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+
+        <!-- 商城分类 -->
+        <view class="form-row">
+          <text class="form-label">商城分类</text>
+          <picker range="{{categoryLabels}}" value="{{categoryIndex}}" bindchange="onCategoryChange">
+            <view class="picker-row">
+              <text>{{categoryLabels[categoryIndex]}}</text>
+              <text class="arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+
+        <!-- 套餐名 -->
+        <view class="form-row">
+          <text class="form-label">套餐名 *</text>
+          <textarea class="form-textarea" placeholder="请输入套餐名"
+                    auto-height maxlength="50" fixed
+                    value="{{form.name}}"
+                    bindinput="onFormInput" data-key="name" />
+        </view>
+
+        <!-- 价格 -->
+        <view class="form-row">
+          <text class="form-label">价格 *</text>
+          <textarea class="form-textarea" placeholder="0.00"
+                    auto-height maxlength="10" fixed
+                    value="{{form.price}}"
+                    bindinput="onFormInput" data-key="price" />
+        </view>
+
+        <!-- 描述 -->
+        <view class="form-row">
+          <text class="form-label">描述</text>
+          <textarea class="form-textarea" placeholder="可选，展示在商城套餐卡片上"
+                    auto-height maxlength="200" fixed
+                    value="{{form.description}}"
+                    bindinput="onFormInput" data-key="description" />
+        </view>
+
+        <!-- 屏幕服务（到店套餐） -->
+        <view wx:if="{{form.type==='store' || editing && editing.type!=='online'}}" class="form-row">
+          <text class="form-label">屏幕服务（分钟）</text>
+          <textarea class="form-textarea" placeholder="0 = 不含屏幕服务"
+                    auto-height maxlength="6" fixed
+                    value="{{form.screen_minutes}}"
+                    bindinput="onFormInput" data-key="screen_minutes" />
+        </view>
+
+        <!-- VIP等级（线上套餐） -->
+        <view wx:if="{{form.type==='online' || editing && editing.type==='online'}}" class="form-row">
+          <text class="form-label">VIP等级</text>
+          <picker range="{{['普通VIP（1）', 'SVIP（2）', '纯配额包（不动等级）']}}" value="{{form.vip_level === 2 ? 1 : form.vip_level === 0 ? 2 : 0}}"
+                  bindchange="onVipLevelChange">
+            <view class="picker-row">
+              <text>{{form.vip_level === 2 ? 'SVIP（2）' : form.vip_level === 0 ? '纯配额包（不动等级）' : '普通VIP（1）'}}</text>
+              <text class="arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+
+        <!-- VIP天数（线上套餐） -->
+        <view wx:if="{{form.type==='online' || editing && editing.type==='online'}}" class="form-row">
+          <text class="form-label">VIP天数</text>
+          <textarea class="form-textarea" placeholder="0 = 纯配额包（不延长VIP时长）"
+                    auto-height maxlength="6" fixed
+                    value="{{form.vip_days}}"
+                    bindinput="onFormInput" data-key="vip_days" />
+        </view>
+
+        <!-- 图生图配额（线上套餐） -->
+        <view wx:if="{{form.type==='online' || editing && editing.type==='online'}}" class="form-row">
+          <text class="form-label">图生图配额</text>
+          <textarea class="form-textarea" placeholder="0 = 不赠送配额（纯续费包）"
+                    auto-height maxlength="6" fixed
+                    value="{{form.image_gen_quota}}"
+                    bindinput="onFormInput" data-key="image_gen_quota" />
+        </view>
+
+        <!-- 好感度增量 -->
+        <view class="form-row">
+          <text class="form-label">好感度增量</text>
+          <textarea class="form-textarea" placeholder="30"
+                    auto-height maxlength="6" fixed
+                    value="{{form.affinity_delta}}"
+                    bindinput="onFormInput" data-key="affinity_delta" />
+        </view>
+
+        <!-- [Shop] 图片管理（编辑模式才显示） -->
+        <view wx:if="{{editing}}" class="form-section">
+          <view class="section-header">
+            <text class="form-label">套餐图片</text>
+            <text class="img-count-hint">{{editImages.length}}/9 张</text>
+          </view>
+
+          <view class="img-grid">
+            <!-- 已有图片 -->
+            <view wx:for="{{editImages}}" wx:key="index"
+                  class="img-thumb-wrap">
+              <image class="img-thumb"
+                     src="{{baseUrl + '/api/p/images/' + item}}"
+                     mode="aspectFill"
+                     bindtap="previewImage"
+                     data-path="{{item}}" />
+              <view class="img-del-btn" bindtap="deleteImage" data-path="{{item}}">
+                <text class="img-del-icon">×</text>
+              </view>
+            </view>
+
+            <!-- 上传按钮（未满9张时显示） -->
+            <view wx:if="{{editImages.length < 9}}"
+                  class="img-add-btn {{imgUploading ? 'uploading' : ''}}"
+                  bindtap="uploadImage">
+              <text class="img-add-icon">{{imgUploading ? '…' : '+'}}</text>
+              <text class="img-add-text">{{imgUploading ? '上传中' : '添加图片'}}</text>
+            </view>
+          </view>
+
+          <text class="img-tip">长按图片可删除，第一张为商城封面图</text>
+        </view>
+
+        <!-- 新增时的图片提示 -->
+        <view wx:elif="{{!editing}}" class="form-hint-block">
+          <text class="form-hint">保存套餐后可上传图片</text>
+        </view>
+
+      </scroll-view>
+
+      <view class="modal-btns">
+        <view class="modal-btn cancel" bindtap="closeModal"><text>取消</text></view>
+        <view class="modal-btn confirm {{submitting?'btn-loading':''}}" bindtap="submitForm">
+          <text>{{submitting?'提交中…':'确认'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+</view>

@@ -1,0 +1,62 @@
+# =====================================================================
+# 希卡莉 (Hikari) - hikari-makeup 容器
+# 路由：/api/u/makeup/（Nginx 转发）
+# 端口：8003
+# 内存紧张时可暂不启动，注释掉 nginx.conf 对应 location 即可
+# =====================================================================
+
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    TZ=Asia/Shanghai \
+    DEBIAN_FRONTEND=noninteractive
+
+RUN (if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+        sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources; \
+    fi) && \
+    apt-get update -y && \
+    apt-get install -y --no-install-recommends \
+        curl tzdata libmagic1 \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.tool.txt requirements.txt
+RUN pip install --no-cache-dir -U pip -i https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+RUN useradd -r -u 1001 -g root hikari && \
+    mkdir -p /app/assets/uploads /app/logs && \
+    chown -R hikari:root /app/assets/uploads /app/logs && \
+    chmod -R 750 /app/assets/uploads /app/logs
+
+# 按重构文档第十节：只 COPY 此容器需要的文件
+COPY src/utils/                                 src/utils/
+COPY src/core/                                  src/core/
+COPY src/services/makeup_service.py             src/services/
+COPY src/services/ws_result_push.py             src/services/
+COPY src/modules/tools/shared/                  src/modules/tools/shared/
+COPY src/modules/tools/makeup/                  src/modules/tools/makeup/
+COPY src/workflows/makeup_workflow.py           src/workflows/
+
+RUN touch src/__init__.py \
+         src/services/__init__.py \
+         src/modules/__init__.py \
+         src/modules/tools/__init__.py \
+         src/workflows/__init__.py
+
+EXPOSE 8003
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8003/api/sys/health || exit 1
+
+USER hikari
+
+CMD ["gunicorn", "src.modules.tools.makeup.api:app", \
+     "-w", "1", \
+     "-k", "uvicorn.workers.UvicornWorker", \
+     "-b", "0.0.0.0:8003", \
+     "--timeout", "120"]

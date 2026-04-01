@@ -1,0 +1,37 @@
+# =====================================================================
+# 希卡莉 (Hikari) - 工具容器共用依赖（imagegen / makeup / copywriting）
+# 只包含工具容器实际需要的包，不含 Temporal Worker / core 引擎依赖
+# =====================================================================
+
+# Web 框架
+quart>=0.19.4
+quart-cors>=0.7.0
+gunicorn==21.2.0
+uvicorn[standard]>=0.27.0
+aiohttp>=3.9.0
+httpx>=0.26.0
+
+# 数据库
+motor>=3.3.0
+redis>=5.0.1
+elasticsearch[async]>=8.0.0
+
+# Temporal（工具容器作为 Activity 执行方，需要 SDK）
+temporalio>=1.6.0
+
+# AI 接口
+openai>=1.12.0
+
+# 图像处理
+Pillow>=10.0.0
+python-magic
+
+# 安全与鉴权
+PyJWT>=2.8.0
+cryptography>=42.0.2
+
+# 基础工具
+pydantic==2.6.1
+python-dotenv==1.0.1
+loguru>=0.7.2
+python-dateutil==2.8.2

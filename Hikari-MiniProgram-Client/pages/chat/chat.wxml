@@ -1,0 +1,269 @@
+<view class="container">
+
+<view class="tech-strip">
+
+  <!-- 左区：好感度 + 心情灯（同行）+ 状态徽章行 -->
+  <view class="strip-left">
+    <view class="aff-row">
+      <text class="strip-label">好感度</text>
+      <view class="bar-bg">
+        <view class="bar-fill" style="width: {{affinity + '%'}}"></view>
+      </view>
+      <text class="strip-val">{{affinity}}%</text>
+    </view>
+    <view class="badge-row">
+      <!-- 次数（普通用户） -->
+      <view wx:if="{{!manageRole && !isVip}}" class="badge-wrap">
+        <text class="badge-text {{msgRemaining <= 10 && msgRemaining >= 0 ? 'quota-low-text' : ''}}">{{msgRemaining < 0 ? '不限' : (msgRemaining + '/' + dailyLimit)}}次</text>
+      </view>
+      <!-- VIP 徽章 + 图生图剩余次数 -->
+      <view wx:if="{{isVip && !manageRole}}" class="vip-quota-group">
+        <view class="mini-badge vip-badge">
+          <text class="mini-badge-text">VIP</text>
+        </view>
+        <text wx:if="{{imageGenQuota >= 0}}"
+              class="badge-text {{imageGenQuota <= 3 ? 'quota-low-text' : ''}}">
+          生图{{imageGenQuota}}次
+        </text>
+      </view>
+      <!-- 管理员徽章 -->
+      <view wx:if="{{manageRole}}" class="mini-badge manage-badge">
+        <text class="mini-badge-text">{{manageRole === 'admin' ? '管理员' : '店员'}}</text>
+      </view>
+      <!-- 在店徽章 -->
+      <view wx:if="{{isInstore}}" class="mini-badge instore-badge" bindtap="doCheckout">
+        <view class="instore-dot"></view>
+        <text class="mini-badge-text">在店</text>
+      </view>
+      <!-- 心情灯：徽章行右边空位 -->
+      <view class="mood-part">
+        <view class="mood-dot {{mood}}"></view>
+        <text class="mood-text">{{moodText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 中区：功能按钮组 -->
+  <view class="strip-center">
+    <view class="strip-actions">
+      <!-- 报告 -->
+      <view class="action-btn {{isMemoirProcessing || memoirCooldown > 0 ? 'processing' : ''}}"
+            bindtap="generateMemoir" hover-class="action-btn-hover">
+        <image class="action-svg-icon {{isMemoirProcessing ? 'icon-spin' : ''}}" src="/assets/images/icon_report.svg" mode="aspectFit"/>
+        <text class="action-label-sm">{{isMemoirProcessing ? '...' : (memoirCooldown > 0 ? memoirCooldown + 's' : '')}}</text>
+      </view>
+      <!-- 商城 -->
+      <view class="action-btn" bindtap="goShop" hover-class="action-btn-hover">
+        <image class="action-svg-icon" src="/assets/images/icon_shop.svg" mode="aspectFit"/>
+      </view>
+      <!-- 管理员入口 -->
+      <view wx:if="{{manageRole}}" class="action-btn" bindtap="openManage" hover-class="action-btn-hover">
+        <image class="action-svg-icon" src="/assets/images/icon_gear.svg" mode="aspectFit"/>
+      </view>
+    </view>
+  </view>
+
+  <!-- 右区：声线选择器 -->
+  <view class="strip-right">
+    <picker bindchange="onVoiceChange" value="{{voiceIndex}}" range="{{voiceLibrary}}">
+      <view class="picker-inner">
+        <text class="voice-label">{{currentVoice}}</text>
+        <text class="arrow">▼</text>
+      </view>
+    </picker>
+  </view>
+
+</view>
+
+<scroll-view 
+  class="chat-body" 
+  scroll-y="true" 
+  scroll-into-view="{{scrollToView}}" 
+  scroll-with-animation="true" 
+  enhanced="true" 
+  show-scrollbar="false" 
+  bindscroll="onScroll"
+>
+  <!-- 加载更多历史 -->
+  <view class="load-more-wrap" wx:if="{{hasMoreHistory || isLoadingMore}}">
+    <text class="load-more-text">{{isLoadingMore ? '加载中...' : '上拉加载更多'}}</text>
+  </view>
+
+  <block wx:for="{{messages}}" wx:key="id">
+    <view id="msg_{{index}}" class="msg-row {{item.role === 'user' ? 'user' : 'assistant'}}">
+
+      <view class="avatar-wrap {{item.role === 'user' ? 'avatar-wrap-user' : 'avatar-wrap-bot'}}">
+        <image class="avatar" src="{{item.role === 'user' ? (userAvatarPath || '../../assets/images/user.png') : '../../assets/images/hikari.png'}}" mode="aspectFill" bindlongpress="onAvatarLongPress" data-role="{{item.role}}" />
+      </view>
+
+      <view class="bubble-container">
+        <!-- 气泡：typing 状态显示三点动画，否则显示正文内容；同一个 DOM 节点避免切换时布局跳动 -->
+        <view class="bubble {{item.is_typing ? 'typing-bubble' : ''}} {{!item.is_typing && item.is_report ? 'report-border' : ''}}" wx:if="{{item.is_typing || item.content || item.image_url || item.temp_image_url || item.is_report}}">
+          <view class="typing-dots" wx:if="{{item.is_typing}}">
+            <view class="typing-dot dot1"></view>
+            <view class="typing-dot dot2"></view>
+            <view class="typing-dot dot3"></view>
+          </view>
+          <block wx:if="{{!item.is_typing}}">
+
+          <view class="msg-image-wrap" wx:if="{{item.image_url || item.temp_image_url}}">
+            <image 
+              class="msg-image" 
+              src="{{item.temp_image_url || item.image_url}}" 
+              mode="widthFix" 
+              bindtap="previewImage" 
+              data-url="{{item.temp_image_url || item.image_url}}"
+              lazy-load="true"
+            />
+            <!-- 多图张数角标 -->
+            <view class="multi-img-badge" wx:if="{{item.temp_image_count > 1}}">
+              <text class="multi-img-badge-text">共{{item.temp_image_count}}张</text>
+            </view>
+          </view>
+
+          <text user-select="true" wx:if="{{item.content}}">{{item.content}}</text>
+
+          <view class="report-card-embed" wx:if="{{item.is_report}}" bindtap="viewReport" data-url="{{item.report_url}}">
+            <view class="report-card-content">
+              <view class="report-card-icon">📑</view>
+              <view class="report-card-info">
+                <text class="report-card-title">点击查看深度观察报告</text>
+                <text class="report-card-date">DEEP MEMOIR ANALYSIS</text>
+              </view>
+              <view class="report-card-arrow">进入 ></view>
+            </view>
+          </view>
+          </block>
+        </view>
+
+        <!-- 🎨 Seedream 图生图结果（与 voice 区平级，在 bubble 外） -->
+        <block wx:if="{{item.role === 'assistant' && item.gen_image_status}}">
+
+          <!-- 生成中 loading -->
+          <view class="voice-play-area" wx:if="{{item.gen_image_status === 'loading'}}">
+            <view class="loading-wrapper">
+              <view class="loading-dot"></view>
+              <text class="loading-text">Seedream 四宫格生成中喵…</text>
+            </view>
+          </view>
+
+          <!-- 生成成功：视觉识别文字 + 生成图 -->
+          <block wx:if="{{item.gen_image_status === 'ready'}}">
+            <view class="bubble" wx:if="{{item.char_text}}">
+              <text user-select="true" decode="{{true}}">{{item.char_text}}</text>
+            </view>
+            <view class="msg-image-wrap" wx:if="{{item.gen_image_url}}">
+              <image
+                class="msg-image"
+                src="{{item.gen_image_url}}"
+                mode="widthFix"
+                bindtap="previewImage"
+                bindlongpress="saveSticker"
+                data-url="{{item.gen_image_url}}"
+                lazy-load="true"
+              />
+            </view>
+          </block>
+
+          <!-- 生成失败 -->
+          <view class="bubble" wx:if="{{item.gen_image_status === 'failed'}}">
+            <text>❌ {{item.char_text || '生成失败喵，稍后再试'}}</text>
+          </view>
+
+        </block>
+
+        <!-- 🎭 希卡莉表情GIF -->
+        <view class="sticker-wrap" wx:if="{{item.role === 'assistant' && item.sticker_url}}">
+          <image
+            class="sticker-gif"
+            src="{{item.sticker_url}}"
+            mode="aspectFit"
+            lazy-load="true"
+            bindlongpress="saveSticker"
+            data-url="{{item.sticker_url}}"
+          />
+        </view>
+
+        <view class="voice-play-area" wx:if="{{item.role === 'assistant' && item.voice_status === 'ready'}}">
+          <view class="play-btn {{playingMsgId === item.id ? 'playing' : ''}}" bindtap="playVoice" data-url="{{item.voice_url}}" data-id="{{item.id}}">
+            <text class="p-icon">{{playingMsgId === item.id ? '■' : '▶'}}</text>
+            <text>{{playingMsgId === item.id ? '正在播放' : '播放语音'}}</text>
+          </view>
+        </view>
+
+        <view class="voice-play-area" wx:if="{{item.role === 'assistant' && item.voice_status === 'loading'}}">
+          <view class="loading-wrapper">
+            <view class="loading-dot"></view>
+            <text class="loading-text">希卡莉正在准备声线喵...</text>
+          </view>
+        </view>
+      <!-- 时间戳 -->
+      <view class="msg-time" wx:if="{{item.display_time}}">
+        <text class="msg-time-text">{{item.display_time}}</text>
+      </view>
+
+      </view>
+
+    </view>
+  </block>
+  <view class="bottom-pad"></view>
+</scroll-view>
+
+<view class="control-panel">
+  
+  <!-- 多图预览 -->
+  <view class="pre-send-assets multi-scroll" wx:if="{{pendingImagePaths.length > 0}}">
+    <scroll-view scroll-x="true" class="multi-img-scroll" enhanced="true" show-scrollbar="false">
+      <view class="multi-img-row">
+        <block wx:for="{{pendingImagePaths}}" wx:key="index">
+          <view class="asset-preview-card">
+            <image src="{{item}}" mode="aspectFill" class="p-img" />
+          </view>
+        </block>
+      </view>
+    </scroll-view>
+    <view class="multi-img-meta">
+      <text class="multi-img-count">已选 {{pendingImagePaths.length}} 张</text>
+      <view class="remove-all-tag" bindtap="removeImage">全部清除</view>
+    </view>
+    <view class="multi-upload-progress" wx:if="{{uploadProgress}}">
+      <view class="loading-dot"></view>
+      <text class="loading-text">{{uploadProgress}}</text>
+    </view>
+  </view>
+
+  <!-- 单图预览 -->
+  <view class="pre-send-assets" wx:elif="{{tempImagePath}}">
+    <view class="asset-preview-card">
+      <image src="{{tempImagePath}}" mode="aspectFill" class="p-img" bindtap="previewImage" data-url="{{tempImagePath}}" />
+      <view class="remove-tag" bindtap="removeImage">×</view>
+      <view class="upload-mask" wx:if="{{isUploading}}">
+        <text class="loading-icon">⏳</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="input-module">
+    <view class="vision-btn {{isUploading || isGenerating ? 'btn-disabled' : ''}}" bindtap="chooseImage">
+      <image class="camera-svg-icon" src="/assets/images/icon_camera.svg" mode="aspectFit"/>
+    </view>
+
+    <textarea 
+      class="main-input" 
+      placeholder="{{isUploading ? '希卡莉正在读图喵...' : '输入指令...'}}" 
+      value="{{inputValue}}" 
+      bindinput="onInput" 
+      auto-height="true" 
+      fixed="true" 
+      cursor-spacing="20" 
+      maxlength="500"
+      disabled="{{isUploading}}"
+    ></textarea>
+
+    <view class="send-btn {{(inputValue.length > 0 || currentImageId || pendingImageIds.length > 0) && !isGenerating && !isUploading ? 'active' : 'disabled'}}" bindtap="sendMessage">
+      <text>{{isGenerating ? '...' : '发送'}}</text>
+    </view>
+  </view>
+</view>
+
+</view>

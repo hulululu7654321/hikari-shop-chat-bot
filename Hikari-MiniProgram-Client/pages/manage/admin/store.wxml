@@ -1,0 +1,19 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading-tip"><text>加载中…</text></view>
+  <view wx:elif="{{stores.length===0}}" class="empty-tip"><text>暂无店铺</text></view>
+  <view wx:for="{{stores}}" wx:key="store_id" class="store-card">
+    <text class="store-name">{{item.store_name}}</text>
+    <view class="url-row">
+      <text class="store-url" bindtap="copyUrl" data-url="{{item.url}}">{{item.url || '未生成'}}</text>
+      <text class="copy-hint" wx:if="{{item.url}}">点击复制</text>
+    </view>
+    <view class="meta-row">
+      <text class="meta">短码：{{item.screen_code || '—'}}</text>
+      <text class="meta">剩余 {{item.ttl_days}} 天</text>
+    </view>
+    <view class="reset-btn {{resetting===item.store_id?'loading':''}}"
+          bindtap="resetCode" data-store="{{item}}">
+      <text>{{resetting===item.store_id?'重置中…':'重置短码'}}</text>
+    </view>
+  </view>
+</view>

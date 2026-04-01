@@ -1,0 +1,2098 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>希卡莉 · 店铺屏幕端</title>
+<style>
+  @import url('https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css');
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600&display=swap');
+
+  :root {
+    --sakura-pale:   #fdf0f4;
+    --sakura-blush:  #f0b8cc;
+    --sakura-rose:   #d96a8a;
+    --sakura-deep:   #8a3050;
+    --ink:           #1a1018;
+    --ink-mid:       #3d2535;
+    --ink-soft:      rgba(26,16,24,0.55);
+    --gold:          #c9a85c;
+    --gold-pale:     rgba(201,168,92,0.18);
+    --white-glass:   rgba(255,255,255,0.72);
+    --panel-glass:   rgba(255,248,252,0.82);
+    --shadow-soft:   0 8px 40px rgba(90,20,40,0.12);
+    --shadow-card:   0 2px 16px rgba(90,20,40,0.10);
+    --r-card:        16px;
+    --r-pill:        999px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background:#0d0810;
+    font-family: 'LXGW WenKai', 'Nunito', 'PingFang SC', sans-serif;
+    color: var(--ink);
+    cursor: none;
+  }
+
+  /* ── Background canvas ── */
+  #bg-canvas {
+    position:fixed; inset:0; z-index:0;
+    background: radial-gradient(ellipse 110% 80% at 60% 50%,
+      #2a1035 0%, #150820 45%, #0d0810 100%);
+  }
+
+  .petals-layer {
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+  }
+
+  .petal {
+    position:absolute; top:-40px;
+    width:12px; height:12px;
+    background: radial-gradient(ellipse at 35% 35%, #fde8f0, #f0aec5 60%, #c97898);
+    border-radius: 80% 20% 80% 20%;
+    opacity:0;
+    animation: fall linear infinite;
+  }
+
+  @keyframes fall {
+    0%   { transform: translateY(0) rotate(0deg) translateX(0);    opacity:0; }
+    5%   { opacity: 0.7; }
+    90%  { opacity: 0.5; }
+    100% { transform: translateY(105vh) rotate(540deg) translateX(60px); opacity:0; }
+  }
+
+  /* ── Live2D area ── */
+  #live2d-wrap {
+    position:fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    transition: filter 0.6s ease;
+  }
+
+  #live2d-wrap.idle-dim {
+    filter: brightness(0.75) saturate(0.8);
+  }
+
+  #live2d-canvas {
+    width:100%; height:100%;
+  }
+
+  /* Placeholder while model loads */
+  #live2d-placeholder {
+    position:absolute; inset:0;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:14px;
+    color: rgba(240,184,204,0.6);
+    font-size: 14px; letter-spacing: 0.1em;
+  }
+
+  .placeholder-icon {
+    width:80px; height:80px;
+    border: 1.5px solid rgba(240,184,204,0.3);
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:32px;
+    animation: float-gentle 3s ease-in-out infinite;
+  }
+
+  @keyframes float-gentle {
+    0%,100% { transform:translateY(0); }
+    50%     { transform:translateY(-10px); }
+  }
+
+  /* ── QR Code panel (bottom-right) ── */
+  #qr-panel {
+    position:fixed; bottom:32px; right:32px; z-index:50;
+    width:176px;
+    background: var(--panel-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(240,184,204,0.35);
+    border-radius: var(--r-card);
+    padding:16px;
+    box-shadow: var(--shadow-card);
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+    transition: opacity 0.4s;
+  }
+
+  #qr-panel .qr-label {
+    font-size: 15px; letter-spacing:0.15em;
+    color: var(--ink-soft);
+    text-align:center; line-height:1.5;
+    font-weight:500;
+  }
+
+  #qr-frame {
+    width:136px; height:136px;
+    border-radius:10px;
+    background: white;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    position:relative;
+  }
+
+  #qr-img { width:100%; height:100%; object-fit:contain; }
+
+  #qr-loading {
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    background:white;
+    font-size:11px; color:#ccc;
+  }
+
+  #qr-countdown {
+    font-size:13px; color:var(--ink-soft); letter-spacing:0.05em;
+  }
+
+  /* ── Customer list (top-right) ── */
+  #customer-panel {
+    position:fixed; top:28px; right:32px; z-index:50;
+    width:320px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events:none;
+    scrollbar-width: none;
+  }
+  #customer-panel::-webkit-scrollbar { display:none; }
+
+  .customer-card {
+    background: var(--panel-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(240,184,204,0.35);
+    border-radius: var(--r-card);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-card);
+    opacity:0; transform:translateX(16px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .customer-card.visible {
+    opacity:1; transform:translateX(0);
+  }
+  .customer-card.paid {
+    border-color: rgba(201,168,92,0.5);
+  }
+
+  .card-name {
+    font-size:22px; font-weight:500; color:var(--ink); line-height:1.3;
+    letter-spacing:0.02em;
+  }
+  .card-name span { color:var(--sakura-rose); font-weight:600; }
+
+  .card-meta {
+    font-size:14px; color:var(--ink-soft);
+    margin-top:5px; letter-spacing:0.06em;
+  }
+
+  .card-aff-row {
+    display:flex; align-items:center; gap:8px; margin-top:10px;
+  }
+  .card-aff-label {
+    font-size:13px; color:var(--ink-soft); flex-shrink:0;
+  }
+  .aff-bar {
+    flex:1; height:4px; background:rgba(140,80,100,0.15); border-radius:2px; overflow:hidden;
+  }
+  .aff-fill {
+    height:100%; border-radius:2px;
+    background: linear-gradient(90deg, var(--sakura-blush), var(--sakura-rose));
+    transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width:0%;
+  }
+
+  .card-package {
+    margin-top:10px;
+    padding: 7px 12px;
+    background: rgba(201,168,92,0.12);
+    border-radius: 8px;
+    font-size:14px; color: #c9a85c;
+    display:flex; justify-content:space-between; align-items:center;
+    border: 1px solid rgba(201,168,92,0.2);
+  }
+  .card-package-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+  .card-countdown {
+    font-size:14px; font-weight:600; color:#c9a85c;
+    flex-shrink:0; margin-left:8px; font-variant-numeric: tabular-nums;
+  }
+  .card-countdown.expired { color: var(--ink-soft); }
+
+  /* ── Store status (top-left) ── */
+  #store-status {
+    position:fixed; top:28px; left:32px; z-index:50;
+    display:flex; align-items:center; gap:10px;
+    background: var(--panel-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(240,184,204,0.25);
+    border-radius: var(--r-pill);
+    padding: 10px 18px;
+    box-shadow: var(--shadow-card);
+  }
+
+  .status-dot {
+    width:8px; height:8px; border-radius:50%;
+    background: #6bd6a0;
+    box-shadow: 0 0 8px rgba(107,214,160,0.6);
+    animation: pulse-dot 2.4s ease-in-out infinite;
+  }
+
+  .status-dot.disconnected { background:#e88; box-shadow:0 0 8px rgba(220,100,100,0.5); animation:none; }
+  .status-dot.connecting   { background:#f5c842; box-shadow:0 0 8px rgba(245,200,66,0.5); animation:none; }
+
+  @keyframes pulse-dot {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%     { opacity:0.5; transform:scale(1.3); }
+  }
+
+  #status-text {
+    font-size:16px; color:var(--ink-mid); letter-spacing:0.08em;
+    font-weight:500;
+  }
+
+  /* ── Subtitle / caption bar (bottom-center) ── */
+  #subtitle-bar {
+    position:fixed; bottom:28px; left:50%; z-index:50;
+    transform: translateX(-50%);
+    max-width: 700px; width:calc(100% - 280px);
+    background: var(--panel-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(240,184,204,0.3);
+    border-radius: var(--r-card);
+    padding: 20px 36px;
+    box-shadow: var(--shadow-card);
+    opacity:0; transform:translateX(-50%) translateY(12px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    pointer-events:none;
+    text-align:center;
+  }
+
+  #subtitle-bar.visible {
+    opacity:1; transform:translateX(-50%) translateY(0);
+  }
+
+  #subtitle-text {
+    font-size:26px; line-height:1.7; color:var(--ink-mid);
+    font-family: 'LXGW WenKai', 'Nunito', sans-serif; font-weight:300;
+    min-height:36px;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Order celebration overlay ── */
+  #order-overlay {
+    position:fixed; inset:0; z-index:100;
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none;
+    opacity:0; transition:opacity 0.4s;
+  }
+
+  #order-overlay.show { opacity:1; }
+
+  #order-card {
+    background: var(--panel-glass);
+    backdrop-filter: blur(30px);
+    border: 1.5px solid rgba(201,168,92,0.4);
+    border-radius: 24px;
+    padding: 36px 52px;
+    text-align:center;
+    box-shadow: 0 24px 80px rgba(90,20,40,0.2);
+    transform: scale(0.88);
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  #order-overlay.show #order-card { transform:scale(1); }
+
+  #order-card .order-deco {
+    font-size:56px; display:block; margin-bottom:16px;
+    color: var(--gold);
+    animation: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    letter-spacing:0;
+    text-shadow: 0 0 30px rgba(201,168,92,0.5);
+  }
+
+  @keyframes bounce-in {
+    from { transform:scale(0) rotate(-20deg); }
+    to   { transform:scale(1) rotate(0deg); }
+  }
+
+  #order-customer-name {
+    font-size:36px; font-weight:500; color:var(--ink);
+    font-family:'LXGW WenKai','Nunito',sans-serif; letter-spacing:0.04em;
+  }
+
+  #order-package-name {
+    font-size:20px; color:var(--sakura-rose);
+    margin-top:8px; letter-spacing:0.1em;
+  }
+
+  #order-amount {
+    font-size:52px; font-weight:600; color:var(--ink);
+    margin-top:12px; letter-spacing:-0.01em;
+  }
+
+  #order-amount .unit { font-size:24px; font-weight:300; vertical-align:super; margin-right:2px; }
+
+  #order-affinity-badge {
+    display:inline-flex; align-items:center; gap:6px;
+    background: var(--gold-pale);
+    border:1px solid rgba(201,168,92,0.3);
+    border-radius: var(--r-pill);
+    padding:8px 20px; margin-top:18px;
+    font-size:17px; color:var(--gold); letter-spacing:0.1em;
+  }
+
+  /* ── Confetti particles ── */
+  .confetti-piece {
+    position:fixed; top:-20px; z-index:101;
+    width:8px; height:8px; border-radius:2px;
+    pointer-events:none;
+    animation: confetti-fall linear forwards;
+  }
+
+  @keyframes confetti-fall {
+    0%   { transform: translateY(0) rotate(0deg);   opacity:1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity:0; }
+  }
+
+  /* ── Reconnecting banner ── */
+  #reconnect-banner {
+    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:200;
+    background: rgba(13,8,16,0.92);
+    color:rgba(240,184,204,0.8);
+    padding:20px 36px; border-radius:12px;
+    font-size:13px; letter-spacing:0.12em;
+    display:none;
+  }
+
+  #reconnect-banner.show { display:block; }
+
+  /* ── Idle clock (center top when no customer) ── */
+  #idle-clock {
+    position:fixed; top:50%; left:6%;
+    transform: translateY(-50%);
+    z-index:50;
+    font-family:'LXGW WenKai','Nunito',sans-serif; font-weight:300;
+    font-size:80px; letter-spacing:0.08em;
+    color:rgba(240,184,204,0.75);
+    text-shadow: 0 0 60px rgba(200,100,140,0.5), 0 0 120px rgba(200,100,140,0.2);
+    pointer-events:none;
+    transition:opacity 0.5s;
+  }
+
+  #idle-clock.hidden { opacity:0; }
+
+  #idle-date {
+    text-align:left;
+    font-size:20px; letter-spacing:0.2em;
+    color:rgba(240,184,204,0.55);
+    margin-top:8px;
+  }
+</style>
+</head>
+<body>
+
+<div id="bg-canvas"></div>
+<div class="petals-layer" id="petals-layer" style="display:none"></div>
+
+<!-- Idle clock -->
+<div id="idle-clock">
+  <div id="clock-time">--:--</div>
+  <div id="idle-date"></div>
+</div>
+
+<!-- Store status indicator -->
+<div id="store-status">
+  <div class="status-dot connecting" id="status-dot"></div>
+  <span id="status-text">连接中...</span>
+</div>
+
+<!-- Live2D -->
+<div id="live2d-wrap" class="idle-dim">
+  <canvas id="live2d-canvas"></canvas>
+  <div id="live2d-placeholder">
+    <div class="placeholder-icon">◎</div>
+    <span>模型加载中...</span>
+  </div>
+</div>
+
+<!-- Customer panel (top-right) -->
+<div id="customer-panel">
+  <!-- 动态生成 .customer-card，每个在店客户一张 -->
+</div>
+
+<!-- Subtitle -->
+<div id="subtitle-bar">
+  <div id="subtitle-text"></div>
+</div>
+
+<!-- QR panel (bottom-right) -->
+<div id="qr-panel">
+  <div class="qr-label">扫码签到</div>
+  <div id="qr-frame">
+    <img id="qr-img" src="" alt="二维码" style="display:none"/>
+    <div id="qr-loading">加载中...</div>
+  </div>
+  <div id="qr-countdown"></div>
+</div>
+
+<!-- Order celebration -->
+<div id="order-overlay">
+  <div id="order-card">
+    <div class="order-deco">✦</div>
+    <div id="order-customer-name"></div>
+    <div id="order-package-name"></div>
+    <div id="order-amount"><span class="unit">¥</span><span id="order-amount-val"></span></div>
+    <div id="order-affinity-badge">◆ 契合度 +<span id="order-aff-delta">30</span></div>
+  </div>
+</div>
+
+<!-- Reconnect banner -->
+<div id="reconnect-banner" id="reconnect-banner">◌ 重新连接中，请稍候...</div>
+
+<!-- ────────────────────────────────────── -->
+<!-- Config: edit SCREEN_CONFIG or inject via server-side template -->
+<!-- ────────────────────────────────────── -->
+<script>
+// 自动检测当前域名，兼容 localhost 开发和云端域名部署
+const _origin   = window.location.origin;
+const _wsOrigin = _origin.replace(/^http/, 'ws');
+
+// 从 URL 读短码：/store_screen.html?s=xK9mP2nQ4rT8vW3y
+const _urlParams   = new URLSearchParams(window.location.search);
+const _screenCode  = _urlParams.get('s') || '';
+
+const SCREEN_CONFIG = {
+  SCREEN_CODE:   _screenCode,   // URL 短码，启动时自动换取 JWT 和店铺配置
+  // 以下字段启动后由 /screen_init 返回值自动填充，无需手动填写
+  WS_URL:          "",
+  STORE_TOKEN_URL: `${_origin}/api/s/token`,
+  QR_BASE_URL:     "",
+  SCREEN_JWT:      "",
+  STORE_ID:        "",
+  STORE_NAME:      "",
+  // TTS 走相对路径，自动走当前域名的 Nginx 代理到总店 GPT-SoVITS
+  TTS_URL:         "/tts_api/tts",
+  TTS_CHARACTER:   "女性1_zh",
+  TTS_LANG:        "zh",
+  TTS_REF_AUDIO:   "",
+  // VRM 动作映射，clip 填 .vrma 路径，expression 填 blendShapeProxy 名
+  MOTION_MAP: {
+    idle:      { clip: null, expression: 'neutral'   },
+    talk:      { clip: null, expression: 'neutral'   },
+    happy:     { clip: null, expression: 'happy'     },
+    sad:       { clip: null, expression: 'sad'       },
+    angry:     { clip: null, expression: 'angry'     },
+    wave:      { clip: null, expression: 'wave'      },
+    broadcast: { clip: null, expression: 'broadcast' },
+  },
+  VRM_MOUTH_PARAM: 'JawOpen',  // 夏菲用 ARKit JawOpen，更精准
+  QR_REFRESH_INTERVAL_MS:    55 * 60 * 1000,
+  WS_PING_INTERVAL_MS:       30 * 1000,
+  WS_RECONNECT_DELAY_MS:     3  * 1000,
+  WS_MAX_RECONNECT_DELAY_MS: 30 * 1000,
+  SUBTITLE_DURATION_MS:      6000,
+  ORDER_DISPLAY_DURATION_MS: 5000,
+  BG_VIDEOS: [
+    '/live2d_background/bg01.mp4',
+    '/live2d_background/bg02.mp4',
+    '/live2d_background/bg03.mp4',
+    '/live2d_background/bg04.mp4',
+    '/live2d_background/bg05.mp4',
+  ],
+};
+
+// ────────────────────────
+// State
+// ────────────────────────
+const state = {
+  ws: null,
+  wsReady: false,
+  reconnectAttempts: 0,
+  pingTimer: null,
+  qrRefreshTimer: null,
+  qrCountdownTimer: null,
+  qrRefreshAt: 0,
+  subtitleTimer: null,
+  orderTimer: null,
+  live2dApp: null,
+  live2dModel: null,
+  currentCustomer: null,   // 保留兼容，指向最后签到的客户 user_id_masked
+  customers: new Map(),    // user_id_masked → { display_name, affinity, checkin_time, package_name, paid_expires_at, cardEl }
+  // TTS 参考音频配置（启动时从 /api/s/tts-config 拉取）
+  ttsConfig: {
+    ref_audio_path: "",
+    prompt_text:    "",
+    prompt_lang:    "zh",
+    text_lang:      "zh",
+  },
+};
+
+// ────────────────────────
+// Petals
+// ────────────────────────
+// 花瓣特效已禁用（性能优化）
+
+// ────────────────────────
+// Clock
+// ────────────────────────
+(function tickClock() {
+  const timeEl = document.getElementById('clock-time');
+  const dateEl = document.getElementById('idle-date');
+  function update() {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,'0');
+    const mm = String(now.getMinutes()).padStart(2,'0');
+    timeEl.textContent = `${hh}:${mm}`;
+    dateEl.textContent = now.toLocaleDateString('zh-CN', { month:'long', day:'numeric', weekday:'short' });
+  }
+  update();
+  setInterval(update, 5000);
+})();
+
+// ────────────────────────
+// QR Code
+// ────────────────────────
+async function refreshQR() {
+  const imgEl   = document.getElementById('qr-img');
+  const loadEl  = document.getElementById('qr-loading');
+  const countEl = document.getElementById('qr-countdown');
+
+  if (!SCREEN_CONFIG.STORE_TOKEN_URL || !SCREEN_CONFIG.SCREEN_JWT) {
+    loadEl.textContent = '未配置';
+    return;
+  }
+
+  try {
+    const res = await fetch(SCREEN_CONFIG.STORE_TOKEN_URL, {
+      headers: { 'Authorization': 'Bearer ' + SCREEN_CONFIG.SCREEN_JWT }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const token = data?.data?.store_token || data?.store_token;
+    if (!token) throw new Error('no token');
+
+    const base = SCREEN_CONFIG.QR_BASE_URL ||
+                 `${location.origin}/checkin`;
+    const checkinUrl = `${base}?token=${encodeURIComponent(token)}`;
+
+    // Use QRious (CDN) to render QR
+    if (window.QRious) {
+      const qr = new QRious({
+        value: checkinUrl, size: 272, backgroundAlpha: 1,
+        foreground: '#1a1018', background: '#ffffff', level: 'M',
+      });
+      imgEl.src = qr.toDataURL();
+      imgEl.style.display = 'block';
+      loadEl.style.display = 'none';
+    } else {
+      // Fallback: QR API service
+      imgEl.src = `https://api.qrserver.com/v1/create-qr-code/?size=272x272&data=${encodeURIComponent(checkinUrl)}`;
+      imgEl.style.display = 'block';
+      loadEl.style.display = 'none';
+      imgEl.onerror = () => { loadEl.style.display='flex'; loadEl.textContent='生成失败'; };
+    }
+
+    state.qrRefreshAt = Date.now() + SCREEN_CONFIG.QR_REFRESH_INTERVAL_MS;
+    startQRCountdown();
+  } catch (e) {
+    console.error('[QR] refresh failed:', e);
+    loadEl.style.display = 'flex';
+    loadEl.textContent = '刷新失败';
+  }
+}
+
+function startQRCountdown() {
+  clearInterval(state.qrCountdownTimer);
+  state.qrCountdownTimer = setInterval(() => {
+    const rem = Math.max(0, state.qrRefreshAt - Date.now());
+    const m = Math.floor(rem / 60000);
+    const s = Math.floor((rem % 60000) / 1000);
+    document.getElementById('qr-countdown').textContent =
+      rem > 0 ? `${m}:${String(s).padStart(2,'0')} 后刷新` : '';
+    if (rem <= 0) {
+      clearInterval(state.qrCountdownTimer);
+      refreshQR();
+    }
+  }, 1000);
+}
+
+// Auto-refresh every 55 min
+function scheduleQRRefresh() {
+  clearTimeout(state.qrRefreshTimer);
+  state.qrRefreshTimer = setTimeout(() => { refreshQR(); scheduleQRRefresh(); },
+                                     SCREEN_CONFIG.QR_REFRESH_INTERVAL_MS);
+}
+
+// ────────────────────────
+// ── VRM 渲染层（替换原 Live2D）──────────────────────────────────
+async function initLive2D() {
+  // ES Module 是异步加载的，等库挂到 window 后再继续
+  if (!window.THREE || !window.THREE_VRM) {
+    await new Promise(resolve => {
+      if (window.THREE && window.THREE_VRM) return resolve();
+      window.addEventListener('vrm-ready', resolve, { once: true });
+      // 最多等 10 秒，超时则报错
+      setTimeout(() => resolve(), 10000);
+    });
+  }
+  if (!window.THREE || !window.THREE_VRM) {
+    document.getElementById('live2d-placeholder').querySelector('span').textContent =
+      '请加载 VRM 运行时';
+    return;
+  }
+
+  const MODEL_PATH = SCREEN_CONFIG.LIVE2D_MODEL_URL;
+  if (!MODEL_PATH) {
+    console.warn('[VRM] 未获取到模型路径，跳过加载');
+    return;
+  }
+
+  const canvas = document.getElementById('live2d-canvas');
+  const W = canvas.clientWidth  || 640;
+  const H = canvas.clientHeight || 720;
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setClearColor(0x000000, 0);
+  renderer.setSize(W, H);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+
+  const scene  = new THREE.Scene();
+
+  // ── 背景视频系统（CSS video，比 VideoTexture 更稳定）──
+  const _bgVideos = SCREEN_CONFIG.BG_VIDEOS || [];
+
+  // 预加载所有视频到内存，避免切换时等待
+  const _bgCache = {};
+  function _preloadBgVideos() {
+    _bgVideos.forEach(url => {
+      const v = document.createElement('video');
+      v.muted = true;
+      v.loop  = true;
+      v.playsInline = true;
+      v.preload = 'auto';
+      v.src = url;
+      v.load();
+      _bgCache[url] = v;
+      console.log('[BG] 预加载:', url.split('/').pop());
+    });
+  }
+
+  function _initBgVideo() {
+    if (_bgVideos.length === 0) return;
+    // 预加载所有视频
+    _preloadBgVideos();
+
+    // 创建两个展示用 video 元素做交叉淡入
+    ['bg-video-a', 'bg-video-b'].forEach(id => {
+      const v = document.createElement('video');
+      v.id = id;
+      v.muted = true;
+      v.loop  = true;
+      v.playsInline = true;
+      v.style.cssText = `
+        position:fixed; top:0; left:0; width:100%; height:100%;
+        object-fit:cover; z-index:1;
+        opacity:0;
+        transition:opacity 1.5s ease;
+        pointer-events:none;
+      `;
+      document.body.insertBefore(v, document.body.firstChild);
+    });
+
+    // 加载第一个视频
+    const firstUrl = _bgVideos[Math.floor(Math.random() * _bgVideos.length)];
+    const elA = document.getElementById('bg-video-a');
+    elA.src = firstUrl;
+    elA.play().catch(() => {});
+    elA.addEventListener('canplay', () => {
+      elA.style.opacity = '1';
+      console.log('[BG] 初始背景就绪:', firstUrl.split('/').pop());
+    }, { once: true });
+  }
+
+  let _bgCurrent = 'a';
+  let _bgUsedIndices = [];
+  window._switchBgVideo = function _switchBgVideo() {
+    if (_bgVideos.length === 0) return;
+    // 随机但不重复，用完一轮再重置
+    if (_bgUsedIndices.length >= _bgVideos.length) _bgUsedIndices = [];
+    let idx;
+    do { idx = Math.floor(Math.random() * _bgVideos.length); }
+    while (_bgUsedIndices.includes(idx));
+    _bgUsedIndices.push(idx);
+    const url = _bgVideos[idx];
+
+    const next  = _bgCurrent === 'a' ? 'b' : 'a';
+    const nextEl = document.getElementById(`bg-video-${next}`);
+    const curEl  = document.getElementById(`bg-video-${_bgCurrent}`);
+    if (!nextEl) return;
+
+    // 用预加载缓存的 src，直接播
+    nextEl.src = url;
+    nextEl.play().catch(() => {});
+    nextEl.addEventListener('canplay', () => {
+      nextEl.style.opacity = '1';
+      if (curEl) curEl.style.opacity = '0';
+      _bgCurrent = next;
+      console.log('[BG] 切换背景:', url.split('/').pop());
+    }, { once: true });
+  }
+
+  function _updateBgMesh() {}  // CSS 方案不需要每帧更新
+
+  _initBgVideo();
+  const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 20);
+  camera.position.set(0, 1.0, -5.0);  // 初始值，会被自动适配覆盖
+  camera.lookAt(0, 1.0, 0);
+
+  // 环境光：整体基础亮度
+  scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+
+  // 主光：从摄像机方向偏上打，角色正面亮
+  const dirMain = new THREE.DirectionalLight(0xfff5e8, 1.5);  // 暖白
+  dirMain.position.set(0, 3, 3);
+  scene.add(dirMain);
+
+  // 补光：从后上方补，轮廓光
+  const dirBack = new THREE.DirectionalLight(0xe8f0ff, 0.6);  // 冷蓝
+  dirBack.position.set(0, 2, -3);
+  scene.add(dirBack);
+
+  // 侧光：左侧轻微补光
+  const dirSide = new THREE.DirectionalLight(0xffffff, 0.4);
+  dirSide.position.set(-3, 1, 1);
+  scene.add(dirSide);
+
+  // 主光跟随摄像机（在渲染循环里更新）
+  state.dirMain = dirMain;
+
+  // three-vrm v2：用 VRMLoaderPlugin 注册到 GLTFLoader
+  const loader = new THREE.GLTFLoader();
+  loader.register(parser => new THREE_VRM.VRMLoaderPlugin(parser));
+
+  let vrm;
+  try {
+    const gltf = await new Promise((res, rej) => loader.load(MODEL_PATH, res, undefined, rej));
+    vrm = gltf.userData.vrm;
+    if (!vrm) throw new Error('VRM 解析失败，请确认是有效的 VRM 文件');
+
+    THREE_VRM.VRMUtils.removeUnnecessaryVertices(vrm.scene);
+    THREE_VRM.VRMUtils.removeUnnecessaryJoints(vrm.scene);
+
+    scene.add(vrm.scene);
+
+    // 记录所有骨骼的 rest pose，用于动画旋转补偿
+    state.vrmRestPose = {};
+    vrm.scene.traverse(obj => {
+      if (obj.isBone) {
+        state.vrmRestPose[obj.name] = obj.quaternion.clone();
+      }
+    });
+    console.log('[VRM] rest pose 已记录，骨骼数:', Object.keys(state.vrmRestPose).length);
+
+    // 延迟一帧，等 VRM 内部初始化完成后再设置位置
+    requestAnimationFrame(() => {
+      const box    = new THREE.Box3().setFromObject(vrm.scene);
+      const center = box.getCenter(new THREE.Vector3());
+      // 只修正 X/Z 居中，Y 轴让自动适配摄像机处理
+      vrm.scene.position.x = -center.x;
+      vrm.scene.position.z = -center.z;
+      vrm.scene.rotation.y = 0;
+      console.log('[VRM] 居中完成，等待摄像机自动适配...');
+      try {
+        const leftArm  = vrm.humanoid.getBoneNode('leftUpperArm');
+        const rightArm = vrm.humanoid.getBoneNode('rightUpperArm');
+        if (leftArm)  leftArm.rotation.z  =  1.2;
+        if (rightArm) rightArm.rotation.z = -1.2;
+      } catch(_) {}
+    });
+  } catch(e) {
+    console.warn('[VRM] 模型加载失败:', e);
+    return;
+  }
+
+  state.live2dModel      = vrm;
+  state.live2dApp        = renderer;
+  state.vrmMixer         = new THREE.AnimationMixer(vrm.scene);
+  state.vrmClock         = new THREE.Clock();
+  state.vrmCurrentAction = null;
+
+  document.getElementById('live2d-placeholder').style.display = 'none';
+  document.getElementById('live2d-wrap').classList.remove('idle-dim');
+
+  // 摄像机目标值，用平滑插值避免跳动
+  let camTargetY   = 1.0;
+  let camTargetDist = 3.0;
+  let camLocked    = false;
+  let fitFrame     = 0;
+
+  (function animate() {
+    requestAnimationFrame(animate);
+    const delta = state.vrmClock.getDelta();
+    // 眼睛跟随摄像机
+    if (vrm.lookAt) {
+      vrm.lookAt.target = camera;
+    }
+    // 主光跟随摄像机方向，始终从正面偏上打
+    if (state.dirMain) {
+      state.dirMain.position.set(
+        camera.position.x * 0.3,
+        camera.position.y + 1.5,
+        camera.position.z + 1.0
+      );
+    }
+    vrm.update(delta);
+    state.vrmMixer.update(delta);
+    if (state.vrmNormMixer) state.vrmNormMixer.update(delta);
+
+    fitFrame++;
+    // 前200帧持续计算目标，之后锁定
+    if (fitFrame <= 200) {
+      const b  = new THREE.Box3().setFromObject(vrm.scene);
+      camTargetY    = (b.min.y + b.max.y) / 2;
+      const h       = b.max.y - b.min.y;
+      camTargetDist = (h / (2 * Math.tan(THREE.MathUtils.degToRad(15)))) * 1.15;
+      if (fitFrame === 200) {
+        // 全屏时重新计算距离，让模型在宽屏下也占合适比例
+        const b2   = new THREE.Box3().setFromObject(vrm.scene);
+        const h2   = b2.max.y - b2.min.y;
+        const fovR = THREE.MathUtils.degToRad(camera.fov);
+        camTargetDist = (h2 / (2 * Math.tan(fovR / 2))) * 0.9;
+        camTargetY    = (b2.min.y + b2.max.y) / 2;
+        console.log('[VRM] 摄像机锁定 cy:', camTargetY.toFixed(2), 'dist:', camTargetDist.toFixed(2));
+        camLocked = true;
+        state.camBase = { y: camTargetY, dist: camTargetDist };
+        _randomizeCamera();
+      }
+    }
+
+    // 平滑插值摄像机
+    const lerpFactor = camLocked ? 0.015 : 0.08;
+    camera.position.x   += ((state.camTarget?.x || 0) - camera.position.x) * lerpFactor;
+    camera.position.y   += ((state.camTarget?.y || camTargetY) - camera.position.y) * lerpFactor;
+    camera.position.z   += ((state.camTarget?.z || -camTargetDist) - camera.position.z) * lerpFactor;
+    const lookY = state.camLookY !== undefined ? state.camLookY : camTargetY;
+    camera.lookAt(0, lookY, 0);
+
+    _updateBgMesh();
+    renderer.render(scene, camera);
+  })();
+
+  window.addEventListener('resize', () => {
+    const W2 = canvas.clientWidth || 640;
+    const H2 = canvas.clientHeight || 720;
+    camera.aspect = W2 / H2;
+    camera.updateProjectionMatrix();
+    renderer.setSize(W2, H2);
+  });
+
+  // 预加载所有动作到缓存，切换时零延迟
+  state.vrmClipCache = {};
+  const preloadMotions = Object.values(SCREEN_CONFIG.MOTION_MAP)
+    .map(m => m.clip).filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i); // 去重
+
+  preloadMotions.forEach(clipUrl => {
+    const preloader = new THREE.GLTFLoader();
+    preloader.register(p => new THREE_VRM.VRMLoaderPlugin(p));
+    if (window.THREE_VRM_ANIM) {
+      preloader.register(p => new THREE_VRM_ANIM.VRMAnimationLoaderPlugin(p));
+    }
+    preloader.load(clipUrl, gltf => {
+      state.vrmClipCache[clipUrl] = gltf;
+      console.log('[VRM] 预加载完成:', clipUrl.split('/').pop());
+    }, undefined, err => console.warn('[VRM] 预加载失败:', clipUrl, err));
+  });
+
+  playMotion('idle');
+  console.log('[VRM] 模型加载成功:', MODEL_PATH);
+}
+
+
+// 动态镜头预设
+const CAM_PRESETS = [
+  // [offsetX, offsetY, distMult, lookYOffset, label]
+  [ 0.0,  0.05, 1.0,   0.0,  '正面全身'],
+  [ 0.0,  0.15, 0.7,   0.15, '近景上半身'],
+  [ 0.0, -0.05, 1.2,  -0.05, '远景全身'],
+  [ 0.3,  0.05, 1.05,  0.0,  '右侧轻偏'],
+  [-0.3,  0.05, 1.05,  0.0,  '左侧轻偏'],
+  [ 0.2,  0.12, 0.75,  0.12, '近景右侧'],
+  [-0.2,  0.12, 0.75,  0.12, '近景左侧'],
+];
+
+function _randomizeCamera() {
+  if (!state.camBase) return;
+  const preset = CAM_PRESETS[Math.floor(Math.random() * CAM_PRESETS.length)];
+  const [ox, oy, dm, loy, label] = preset;
+  const base = state.camBase;
+  state.camTarget = {
+    x: ox * base.dist,
+    y: base.y + oy * base.dist,
+    z: -(base.dist * dm),
+  };
+  state.camLookY = base.y + loy * base.dist;
+  console.log('[CAM] 镜头切换:', label);
+}
+
+function playMotion(motionType) {
+  const vrm = state.live2dModel;
+  if (!vrm) return;
+  state.live2dCurrentMotion = motionType;
+  // idle 切换时同步换镜头和背景，不管走哪个分支都触发
+  if (motionType === 'idle') {
+    _randomizeCamera();
+    if (window._switchBgVideo) window._switchBgVideo();
+  }
+  const mRaw = SCREEN_CONFIG.MOTION_MAP[motionType];
+  if (!mRaw) { console.warn('[VRM] unknown motion:', motionType); return; }
+
+  // clip_pool 支持：随机选一个 clip 和 expression
+  let m = mRaw;
+  if (mRaw.clip_pool && mRaw.clip_pool.length > 0) {
+    // 不重复随机：用完一轮再重置
+    const poolKey = `_usedIdx_${motionType}`;
+    if (!state[poolKey] || state[poolKey].length >= mRaw.clip_pool.length) state[poolKey] = [];
+    let clipIdx;
+    do { clipIdx = Math.floor(Math.random() * mRaw.clip_pool.length); }
+    while (state[poolKey].includes(clipIdx));
+    state[poolKey].push(clipIdx);
+
+    const exprPool = mRaw.expression_pool || ['Neutral'];
+    const exprKey2 = `_usedExpr_${motionType}`;
+    if (!state[exprKey2] || state[exprKey2].length >= exprPool.length) state[exprKey2] = [];
+    let exprIdx;
+    do { exprIdx = Math.floor(Math.random() * exprPool.length); }
+    while (state[exprKey2].includes(exprIdx));
+    state[exprKey2].push(exprIdx);
+
+    const basePath = mRaw.base_path || '/live2d/store_001/';
+    const ext = mRaw.ext || '.vrma';
+    m = { clip: basePath + mRaw.clip_pool[clipIdx] + ext, expression: exprPool[exprIdx] };
+
+  }
+  try {
+    if (vrm.expressionManager) {
+      // 清除所有自定义表情，防止串档
+      ['Joy','Joy1','Joy2','Joy3','Joy4','Smile2','Wink','Wink2','AngrySmile','laugh','love','love2','love3',
+       'Neutral','Boring','Boring2','Relaxy','Stare','Disregard','Cat','Sleepy','Sleepy2',
+       'Shy1','Shy2','ForcedSmile','Interesting','Interesting2','InWonder',
+       'Sad','Sad2','Sad3','Cry',
+       'Angry','Angry2','Angry3','Angry4','Taunt','Taunt2','BadSmile',
+       'shocked','Fear','Disgust','Tired','Sour','Crazy','giveup','hypnosis',
+       'fun','sorrow','happy','angry','neutral'].forEach(e => {
+        try { vrm.expressionManager.setValue(e, 0); } catch(_) {}
+      });
+      // 夏菲表情映射
+      const exprMap = {
+        neutral:   'Neutral',
+        happy:     'Joy1',
+        sad:       'Sad',
+        angry:     'Angry',
+        broadcast: 'Joy3',
+        wave:      'Smile2',
+        talk:      'Neutral',
+        // 直接传夏菲表情名也透传
+        Neutral: 'Neutral', Joy1: 'Joy1', Joy2: 'Joy2', Joy3: 'Joy3',
+        Joy4: 'Joy4', Sad: 'Sad', Angry: 'Angry', Smile2: 'Smile2',
+      };
+      const exprKey = exprMap[m.expression] || m.expression;
+      if (exprKey) {
+        try { vrm.expressionManager.setValue(exprKey, 1.0); } catch(_) {}
+      }
+    }
+    if (m.clip && state.vrmMixer) {
+      const animLoader = new THREE.GLTFLoader();
+      // 注册 VRMAnimationLoaderPlugin 以支持标准 vrma 格式
+      animLoader.register(p => new THREE_VRM.VRMLoaderPlugin(p));
+      if (window.THREE_VRM_ANIM && THREE_VRM_ANIM.VRMAnimationLoaderPlugin) {
+        animLoader.register(p => new THREE_VRM_ANIM.VRMAnimationLoaderPlugin(p));
+      }
+      // 优先从缓存取，避免重复网络请求
+      const cachedGltf = state.vrmClipCache && state.vrmClipCache[m.clip];
+      const onGltfLoaded = gltf => {
+        // vrma 骨骼重定向：J_Bip_* → VRM humanoid bone → Normalized_ 节点
+        // 这样动画旋转在归一化坐标系里应用，完全绕过夏菲的 rest pose 偏差
+        const J_BIP_TO_HUMANOID = {
+          'J_Bip_C_Hips':       'hips',
+          'J_Bip_C_Spine':      'spine',
+          'J_Bip_C_Chest':      'chest',
+          'J_Bip_C_UpperChest': 'upperChest',
+          'J_Bip_C_Neck':       'neck',
+          'J_Bip_C_Head':       'head',
+          'J_Bip_L_Shoulder':   'leftShoulder',
+          'J_Bip_L_UpperArm':   'leftUpperArm',
+          'J_Bip_L_LowerArm':   'leftLowerArm',
+          'J_Bip_L_Hand':       'leftHand',
+          'J_Bip_L_Index1':     'leftIndexProximal',
+          'J_Bip_L_Index2':     'leftIndexIntermediate',
+          'J_Bip_L_Index3':     'leftIndexDistal',
+          'J_Bip_L_Middle1':    'leftMiddleProximal',
+          'J_Bip_L_Middle2':    'leftMiddleIntermediate',
+          'J_Bip_L_Middle3':    'leftMiddleDistal',
+          'J_Bip_L_Ring1':      'leftRingProximal',
+          'J_Bip_L_Ring2':      'leftRingIntermediate',
+          'J_Bip_L_Ring3':      'leftRingDistal',
+          'J_Bip_L_Little1':    'leftLittleProximal',
+          'J_Bip_L_Little2':    'leftLittleIntermediate',
+          'J_Bip_L_Little3':    'leftLittleDistal',
+          'J_Bip_L_Thumb1':     'leftThumbMetacarpal',
+          'J_Bip_L_Thumb2':     'leftThumbProximal',
+          'J_Bip_L_Thumb3':     'leftThumbDistal',
+          'J_Bip_R_Shoulder':   'rightShoulder',
+          'J_Bip_R_UpperArm':   'rightUpperArm',
+          'J_Bip_R_LowerArm':   'rightLowerArm',
+          'J_Bip_R_Hand':       'rightHand',
+          'J_Bip_R_Index1':     'rightIndexProximal',
+          'J_Bip_R_Index2':     'rightIndexIntermediate',
+          'J_Bip_R_Index3':     'rightIndexDistal',
+          'J_Bip_R_Middle1':    'rightMiddleProximal',
+          'J_Bip_R_Middle2':    'rightMiddleIntermediate',
+          'J_Bip_R_Middle3':    'rightMiddleDistal',
+          'J_Bip_R_Ring1':      'rightRingProximal',
+          'J_Bip_R_Ring2':      'rightRingIntermediate',
+          'J_Bip_R_Ring3':      'rightRingDistal',
+          'J_Bip_R_Little1':    'rightLittleProximal',
+          'J_Bip_R_Little2':    'rightLittleIntermediate',
+          'J_Bip_R_Little3':    'rightLittleDistal',
+          'J_Bip_R_Thumb1':     'rightThumbMetacarpal',
+          'J_Bip_R_Thumb2':     'rightThumbProximal',
+          'J_Bip_R_Thumb3':     'rightThumbDistal',
+          'J_Bip_L_UpperLeg':   'leftUpperLeg',
+          'J_Bip_L_LowerLeg':   'leftLowerLeg',
+          'J_Bip_L_Foot':       'leftFoot',
+          'J_Bip_L_ToeBase':    'leftToes',
+          'J_Bip_R_UpperLeg':   'rightUpperLeg',
+          'J_Bip_R_LowerLeg':   'rightLowerLeg',
+          'J_Bip_R_Foot':       'rightFoot',
+          'J_Bip_R_ToeBase':    'rightToes',
+        };
+
+        const hasVrmAnim = window.THREE_VRM_ANIM && gltf.userData.vrmAnimations && gltf.userData.vrmAnimations.length > 0;
+        const hasJBipTracks = gltf.animations && gltf.animations.length > 0 &&
+          gltf.animations[0].tracks.some(t => t.name.startsWith('J_Bip_'));
+
+        if (hasJBipTracks && state.live2dModel.humanoid) {
+          // J_Bip_* 格式：通过 humanoid.getNormalizedBoneNode 重定向到归一化骨骼
+          const humanoid = state.live2dModel.humanoid;
+          const rawClip = gltf.animations[0];
+          const clip = rawClip.clone();
+          clip.tracks = rawClip.tracks.map(track => {
+            const dot = track.name.indexOf('.');
+            const jBipName = track.name.substring(0, dot);
+            const prop = track.name.substring(dot);
+            const humanoidName = J_BIP_TO_HUMANOID[jBipName];
+            if (!humanoidName) return null;
+            const node = humanoid.getNormalizedBoneNode(humanoidName);
+            if (!node) return null;
+            const t = track.clone();
+            t.name = node.name + prop;
+            return t;
+          }).filter(Boolean);
+          console.log('[VRM] J_Bip→Normalized 重定向完成，轨道数:', clip.tracks.length);
+
+          if (state.vrmCurrentAction) state.vrmCurrentAction.fadeOut(0.3);
+          if (!state.vrmNormMixer) {
+            const rig = state.live2dModel.scene.getObjectByName('VRMHumanoidRig');
+            state.vrmNormMixer = new THREE.AnimationMixer(rig || state.live2dModel.scene);
+          }
+          const action = state.vrmNormMixer.clipAction(clip);
+          action.reset().fadeIn(0.3).play();
+          state.vrmCurrentAction = action;
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = true;
+          const onFinish = e => {
+            if (e.action === action) {
+              state.vrmNormMixer.removeEventListener('finished', onFinish);
+              if (motionType === 'idle' || motionType === 'talk') {
+                playMotion(motionType);  // 随机换下一个 pose/dance + 表情
+              } else {
+                playMotion('idle');
+              }
+            }
+          };
+          state.vrmNormMixer.addEventListener('finished', onFinish);
+          console.log('[VRM] 动作已加载(归一化):', motionType, m.clip.split('/').pop());
+          return;
+        }
+
+        // 优先用标准 vrma 格式（gltf.userData.vrmAnimations）
+        if (hasVrmAnim) {
+          let clip = THREE_VRM_ANIM.createVRMAnimationClip(gltf.userData.vrmAnimations[0], state.live2dModel);
+          // Normalized_ 轨道直接绑定到 humanoid 归一化骨骼，无需任何处理
+          // three-vrm v2 的 createVRMAnimationClip 已正确处理坐标系
+          if (state.vrmCurrentAction) state.vrmCurrentAction.fadeOut(0.3);
+          const action = state.vrmMixer.clipAction(clip);
+          action.reset().fadeIn(0.3).play();
+          state.vrmCurrentAction = action;
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = true;
+          const onFinishStd = e => {
+            if (e.action === action) {
+              state.vrmMixer.removeEventListener('finished', onFinishStd);
+              if (motionType === 'idle' || motionType === 'talk') {
+                playMotion(motionType);
+              } else {
+                playMotion('idle');
+              }
+            }
+          };
+          state.vrmMixer.addEventListener('finished', onFinishStd);
+          console.log('[VRM] vrma 标准格式动作已加载:', motionType);
+          return;
+        }
+        // fallback：老格式，用骨骼名映射
+        const clips = gltf.animations;
+        if (!clips || clips.length === 0) { console.warn('[VRM] vrma 无动画:', m.clip); return; }
+        if (state.vrmCurrentAction) state.vrmCurrentAction.fadeOut(0.3);
+
+        // vrma 骨骼名 → 模型骨骼名 映射表
+        const BONE_MAP = {
+          'J_Bip_C_Hips':       'Hips',
+          'J_Bip_C_Spine':      'Spine',
+          'J_Bip_C_Chest':      'Chest',
+          'J_Bip_C_UpperChest': 'Chest',
+          'J_Bip_C_Neck':       'Neck',
+          'J_Bip_C_Head':       'Head',
+          'J_Bip_L_Shoulder':   'Left_shoulder',
+          'J_Bip_L_UpperArm':   'Left_arm',
+          'J_Bip_L_LowerArm':   'Left_elbow',
+          'J_Bip_L_Hand':       'Left_wrist',
+          'J_Bip_L_Index1':     'IndexFinger1_L',
+          'J_Bip_L_Index2':     'IndexFinger2_L',
+          'J_Bip_L_Index3':     'IndexFinger3_L',
+          'J_Bip_L_Little1':    'LittleFinger1_L',
+          'J_Bip_L_Little2':    'LittleFinger2_L',
+          'J_Bip_L_Little3':    'LittleFinger3_L',
+          'J_Bip_L_Middle1':    'MiddleFinger1_L',
+          'J_Bip_L_Middle2':    'MiddleFinger2_L',
+          'J_Bip_L_Middle3':    'MiddleFinger3_L',
+          'J_Bip_L_Ring1':      'RingFinger1_L',
+          'J_Bip_L_Ring2':      'RingFinger2_L',
+          'J_Bip_L_Ring3':      'RingFinger3_L',
+          'J_Bip_L_Thumb1':     'Thumb0_L',
+          'J_Bip_L_Thumb2':     'Thumb1_L',
+          'J_Bip_L_Thumb3':     'Thumb2_L',
+          'J_Bip_R_Shoulder':   'Right_shoulder',
+          'J_Bip_R_UpperArm':   'Right_arm',
+          'J_Bip_R_LowerArm':   'Right_elbow',
+          'J_Bip_R_Hand':       'Right_wrist',
+          'J_Bip_R_Index1':     'IndexFinger1_R',
+          'J_Bip_R_Index2':     'IndexFinger2_R',
+          'J_Bip_R_Index3':     'IndexFinger3_R',
+          'J_Bip_R_Little1':    'LittleFinger1_R',
+          'J_Bip_R_Little2':    'LittleFinger2_R',
+          'J_Bip_R_Little3':    'LittleFinger3_R',
+          'J_Bip_R_Middle1':    'MiddleFinger1_R',
+          'J_Bip_R_Middle2':    'MiddleFinger2_R',
+          'J_Bip_R_Middle3':    'MiddleFinger3_R',
+          'J_Bip_R_Ring1':      'RingFinger1_R',
+          'J_Bip_R_Ring2':      'RingFinger2_R',
+          'J_Bip_R_Ring3':      'RingFinger3_R',
+          'J_Bip_R_Thumb1':     'Thumb0_R',
+          'J_Bip_R_Thumb2':     'Thumb1_R',
+          'J_Bip_R_Thumb3':     'Thumb2_R',
+          'J_Bip_L_UpperLeg':   'Left_leg',
+          'J_Bip_L_LowerLeg':   'Left_knee',
+          'J_Bip_L_Foot':       'Left_ankle',
+          'J_Bip_L_ToeBase':    'Left_toe',
+          'J_Bip_R_UpperLeg':   'Right_leg',
+          'J_Bip_R_LowerLeg':   'Right_knee',
+          'J_Bip_R_Foot':       'Right_ankle',
+          'J_Bip_R_ToeBase':    'Right_toe',
+        };
+
+        // 重命名轨道，把 vrma 骨骼名替换成模型骨骼名
+        const clip = clips[0].clone();
+        clip.tracks = clips[0].tracks
+          .map(track => {
+            const dot = track.name.indexOf('.');
+            const boneName = track.name.substring(0, dot);
+            const prop     = track.name.substring(dot);
+            const mapped   = BONE_MAP[boneName];
+            if (!mapped) return null;  // 没有对应骨骼就跳过
+            const newTrack = track.clone();
+            newTrack.name  = mapped + prop;
+            return newTrack;
+          })
+          .filter(Boolean);
+
+        const action = state.vrmMixer.clipAction(clip);
+        action.reset().fadeIn(0.3).play();
+        state.vrmCurrentAction = action;
+        action.setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true;
+        const onFinish2 = e => {
+          if (e.action === action) {
+            state.vrmMixer.removeEventListener('finished', onFinish2);
+            if (motionType === 'idle' || motionType === 'talk') {
+              playMotion(motionType);
+            } else {
+              playMotion('idle');
+            }
+          }
+        };
+        state.vrmMixer.addEventListener('finished', onFinish2);
+        console.log('[VRM] 动作已加载:', motionType, m.clip.split('/').pop());
+      };
+      if (cachedGltf) {
+        onGltfLoaded(cachedGltf);
+      } else {
+        animLoader.load(m.clip, gltf => {
+          if (state.vrmClipCache) state.vrmClipCache[m.clip] = gltf;
+          onGltfLoaded(gltf);
+        }, undefined, err => console.warn('[VRM] vrma 加载失败:', err));
+      }
+    }
+  } catch(e) {
+    console.warn('[VRM] playMotion error:', e);
+  }
+}
+
+// ────────────────────────
+// WebSocket
+// ────────────────────────
+// ────────────────────────
+// Screen 初始化：短码换 JWT + 店铺配置
+// ────────────────────────
+
+async function fetchScreenInit() {
+  const code = SCREEN_CONFIG.SCREEN_CODE;
+  if (!code) {
+    setStatus('disconnected', '缺少访问码（?s=xxx）');
+    console.error('[Screen-Init] URL 中缺少 ?s= 访问码');
+    return false;
+  }
+  try {
+    const resp = await fetch(`/api/s/screen-init?s=${encodeURIComponent(code)}`);
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      setStatus('disconnected', body.msg || `初始化失败 ${resp.status}`);
+      return false;
+    }
+    const body = await resp.json();
+    if (body.code !== 200 || !body.data) return false;
+
+    const d = body.data;
+
+    // 填充店铺基本信息
+    SCREEN_CONFIG.SCREEN_JWT  = d.token;
+    SCREEN_CONFIG.STORE_ID    = d.store_id;
+    SCREEN_CONFIG.STORE_NAME  = d.store_name || d.store_id;
+    SCREEN_CONFIG.WS_URL      = `${_wsOrigin}/api/s/ws/store_screen_${d.store_id}`;
+    SCREEN_CONFIG.STORE_TOKEN_URL = `${_origin}/api/s/token`;
+
+    // 覆盖 Live2D 配置（后端返回时才覆盖，否则保留默认值）
+    if (d.live2d && d.live2d.motion_map) {
+      Object.assign(SCREEN_CONFIG.MOTION_MAP, d.live2d.motion_map);
+      console.log('[Screen-Init] Live2D motion_map 已从后端加载');
+    }
+    if (d.live2d && d.live2d.model_url) {
+      SCREEN_CONFIG.LIVE2D_MODEL_URL = d.live2d.model_url;
+      console.log('[Screen-Init] Live2D 模型路径:', d.live2d.model_url);
+    }
+
+    // 更新页面标题
+    if (d.store_name) document.title = `希卡莉 · ${d.store_name}`;
+
+    // 安排续期：6天后重新调 screen_init 刷新 JWT
+    const ttl = d.ttl_seconds || 7 * 24 * 3600;
+    const renewIn = Math.max(0, (ttl - 86400)) * 1000;
+    setTimeout(fetchScreenInit, renewIn);
+    console.log(`[Screen-Init] 初始化成功 | store=${d.store_id} | ${d.store_name} | ${Math.floor(ttl/3600)}小时后续期`);
+
+    // 触发 WS 连接
+    wsConnect();
+    return true;
+
+  } catch(e) {
+    console.warn('[Screen-Init] 初始化失败:', e);
+    setStatus('disconnected', '初始化失败，请检查访问码');
+    return false;
+  }
+}
+
+async function renewScreenJWT() {
+  // 续期直接重新走 screen_init，保持逻辑统一
+  await fetchScreenInit();
+}
+
+function wsConnect() {
+  if (!SCREEN_CONFIG.WS_URL) {
+    setStatus('disconnected', '未配置 WS_URL');
+    return;
+  }
+  if (!SCREEN_CONFIG.SCREEN_JWT) {
+    setStatus('disconnected', '正在获取连接凭证...');
+    // fetchScreenJWT 完成后会自动重新触发 wsConnect，这里直接返回
+    return;
+  }
+
+  const url = `${SCREEN_CONFIG.WS_URL}?token=${encodeURIComponent(SCREEN_CONFIG.SCREEN_JWT)}`;
+  setStatus('connecting', '连接中...');
+
+  const ws = new WebSocket(url);
+  state.ws = ws;
+
+  ws.onopen = () => {
+    state.wsReady = true;
+    state.reconnectAttempts = 0;
+    setStatus('connected', '系统在线');
+    document.getElementById('reconnect-banner').classList.remove('show');
+    startPing();
+    refreshQR();
+    scheduleQRRefresh();
+  };
+
+  ws.onmessage = (evt) => {
+    let msg;
+    try { msg = JSON.parse(evt.data); } catch { return; }
+    handleMessage(msg);
+  };
+
+  ws.onclose = (evt) => {
+    state.wsReady = false;
+    clearInterval(state.pingTimer);
+    setStatus('disconnected', `已断线 (${evt.code})`);
+    scheduleReconnect();
+  };
+
+  ws.onerror = () => {
+    // onclose will fire after
+  };
+}
+
+function scheduleReconnect() {
+  const delay = Math.min(
+    SCREEN_CONFIG.WS_RECONNECT_DELAY_MS * (1 + state.reconnectAttempts),
+    SCREEN_CONFIG.WS_MAX_RECONNECT_DELAY_MS
+  );
+  state.reconnectAttempts++;
+  if (state.reconnectAttempts > 3) {
+    document.getElementById('reconnect-banner').classList.add('show');
+  }
+  // 重连前先刷新 JWT，防止短码被重置后用旧 JWT 连接
+  setTimeout(async () => {
+    await fetchScreenInit();
+    // fetchScreenInit 成功后内部会调 wsConnect，失败时这里兜底
+    if (!SCREEN_CONFIG.SCREEN_JWT) wsConnect();
+  }, delay);
+}
+
+function startPing() {
+  clearInterval(state.pingTimer);
+  state.pingTimer = setInterval(() => {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify({ action: 'ping' }));
+    }
+  }, SCREEN_CONFIG.WS_PING_INTERVAL_MS);
+}
+
+function setStatus(type, text) {
+  const dot  = document.getElementById('status-dot');
+  const span = document.getElementById('status-text');
+  dot.className = 'status-dot ' + (type === 'connected' ? '' : type);
+  span.textContent = text;
+}
+
+// ────────────────────────
+// Message Handlers
+// ────────────────────────
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'store_event':    handleStoreEvent(msg); break;
+    case 'live2d_motion':  handleLive2DMotion(msg); break;
+    case 'screen_voice':   // 套餐用户对话语音：asset_service 生成后直接推 URL 来播
+      // live2d 动作由同时推送的 live2d_motion 消息处理，这里只播音频
+      if (msg.voice_url) _playVoiceUrl(msg.voice_url);
+      break;
+    case 'force_reload':   // 短码被重置，立刻踢掉当前连接
+      console.warn('[Screen] 收到强制刷新指令，页面即将刷新');
+      setStatus('disconnected', '访问码已更新，正在刷新...');
+      setTimeout(() => window.location.reload(), 1500);
+      break;
+    case 'voice':
+      // 普通对话 TTS 只推给用户手机，屏幕端静默忽略
+      break;
+    case 'pong': break;
+    default: break;
+  }
+}
+
+function handleStoreEvent(msg) {
+  switch (msg.event) {
+    case 'user_danmaku':
+      addDanmaku(msg.display_name, msg.text); break;
+    case 'danmaku_reply':
+      // 希卡莉回应弹幕群体，走 broadcast 动作 + 特殊弹幕样式
+      if (msg.text) {
+        addDanmaku('✨希卡莉', msg.text);
+        enqueueTTS(msg.text, 'broadcast', 'broadcast');
+        showSubtitle(msg.text);
+      }
+      break;
+    case 'customer_checkin':
+      onCheckin(msg);  break;
+    case 'customer_checkout':
+      onCheckout(msg); break;
+    case 'name_learned':
+      onNameLearned(msg); break;
+    case 'order_confirmed':
+      onOrderConfirmed(msg); break;
+    case 'assist_requested':
+      onAssistRequested(msg); break;
+  }
+}
+
+// 从消息里提取 TTS 参数并更新 state.ttsConfig
+// 后端每次推送都会带最新的声线参数，确保屏幕端声线与用户偏好一致
+function syncTTSConfig(msg) {
+  if (msg.ref_audio_path) {
+    state.ttsConfig = {
+      ref_audio_path: msg.ref_audio_path,
+      prompt_text:    msg.prompt_text  || '',
+      prompt_lang:    msg.prompt_lang  || 'zh',
+      text_lang:      msg.text_lang    || 'zh',
+    };
+    console.log('[TTS-Config] 声线已同步 |', msg.ref_audio_path.slice(-30));
+  }
+}
+
+function onCheckin(msg) {
+  const uid = msg.user_id_masked || msg.display_name || 'unknown';
+  addOrUpdateCustomer(uid, {
+    display_name: msg.display_name,
+    affinity:     msg.affinity || 10,
+  });
+  const subtitle = msg.tts_text || `欢迎 ${msg.display_name || '新客户'} 光临！`;
+  showSubtitle(subtitle);
+  enqueueTTS(subtitle);
+  addDanmaku(msg.display_name, subtitle);
+  handleLive2DMotion({ motion: msg.live2d_motion || 'happy', expression: msg.live2d_expression });
+  document.getElementById('idle-clock').classList.add('hidden');
+  document.getElementById('live2d-wrap').classList.remove('idle-dim');
+}
+
+function onCheckout(msg) {
+  const uid = msg.user_id_masked || state.currentCustomer;
+  if (uid) removeCustomer(uid);
+  const subtitle = msg.tts_text || '感谢光临，期待下次相遇～';
+  showSubtitle(subtitle);
+  enqueueTTS(subtitle);
+  addDanmaku(msg.display_name, subtitle);
+  handleLive2DMotion({ motion: msg.live2d_motion || 'wave' });
+  if (state.customers.size === 0) {
+    setTimeout(() => {
+      document.getElementById('idle-clock').classList.remove('hidden');
+      document.getElementById('live2d-wrap').classList.add('idle-dim');
+      playMotion('idle');
+    }, 4000);
+  }
+}
+
+function onNameLearned(msg) {
+  // 更新所有匹配客户卡片的名字显示（无 uid 时更新最近签到的）
+  const uid = msg.user_id_masked || state.currentCustomer;
+  if (uid && state.customers.has(uid)) {
+    const customer = state.customers.get(uid);
+    customer.display_name = msg.user_name;
+    const nameSpan = customer.cardEl.querySelector('.card-name span');
+    if (nameSpan) nameSpan.textContent = msg.user_name;
+  }
+  handleLive2DMotion({ motion: msg.live2d_motion || 'happy' });
+}
+
+function onOrderConfirmed(msg) {
+  // 更新客户卡片：好感度+套餐信息
+  const uid = msg.user_id_masked || state.currentCustomer;
+  if (uid) {
+    const existing = state.customers.get(uid);
+    const newAff = Math.min(100, ((existing && existing.affinity) || 10) + (msg.affinity_delta || 30));
+    addOrUpdateCustomer(uid, {
+      affinity:        newAff,
+      package_name:    msg.package_name,
+      paid_expires_at: msg.paid_expires_at || 0,
+    });
+  }
+
+  document.getElementById('order-customer-name').textContent = msg.display_name || '';
+  document.getElementById('order-package-name').textContent  = msg.package_name  || '';
+  document.getElementById('order-amount-val').textContent    = (msg.amount || 0).toFixed(0);
+  document.getElementById('order-aff-delta').textContent     = msg.affinity_delta || 30;
+
+  const overlay = document.getElementById('order-overlay');
+  overlay.classList.add('show');
+  spawnConfetti();
+
+  const subtitle = msg.tts_text || `${msg.display_name} 下单了 ${msg.package_name}！`;
+  showSubtitle(subtitle);
+  enqueueTTS(subtitle, 'broadcast', null);
+
+  clearTimeout(state.orderTimer);
+  state.orderTimer = setTimeout(() => overlay.classList.remove('show'),
+                                 SCREEN_CONFIG.ORDER_DISPLAY_DURATION_MS);
+}
+
+function handleLive2DMotion(msg) {
+  const motion = msg.motion || msg.motion_type;
+  if (motion) playMotion(motion);
+  // 套餐用户语音由 screen_voice 消息携带 voice_url 直接播放
+  // live2d_motion 只负责动作，不触发 TTS
+}
+
+function onAssistRequested(msg) {
+  const subtitle = msg.tts_text || `${msg.display_name || '有客人'}需要帮助`;
+  showSubtitle(subtitle);
+  enqueueTTS(subtitle, msg.live2d_motion || 'wave', null);
+}
+
+// ────────────────────────
+// 多客户面板管理
+// ────────────────────────
+
+function _createCustomerCard(uid, data) {
+  const card = document.createElement('div');
+  card.className = 'customer-card' + (data.paid_expires_at ? ' paid' : '');
+  card.dataset.uid = uid;
+
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+
+  card.innerHTML = `
+    <div class="card-name">欢迎光临 <span>${data.display_name || '新客户'}</span></div>
+    <div class="card-meta">◷ ${hh}:${mm} 签到</div>
+    <div class="card-aff-row">
+      <span class="card-aff-label">契合度</span>
+      <div class="aff-bar"><div class="aff-fill" style="width:${Math.min(100, data.affinity || 10)}%"></div></div>
+      <span class="card-aff-label" style="margin-left:4px">${data.affinity || 10}</span>
+    </div>
+    ${data.package_name ? `
+    <div class="card-package">
+      <span class="card-package-name">◈ ${data.package_name}</span>
+      <span class="card-countdown" data-expires="${data.paid_expires_at || 0}"></span>
+    </div>` : ''}
+  `;
+
+  document.getElementById('customer-panel').appendChild(card);
+  requestAnimationFrame(() => card.classList.add('visible'));
+  return card;
+}
+
+function addOrUpdateCustomer(uid, data) {
+  const panel = document.getElementById('customer-panel');
+
+  if (state.customers.has(uid)) {
+    // 更新已有卡片
+    const existing = state.customers.get(uid);
+    Object.assign(existing, data);
+    const card = existing.cardEl;
+
+    // 更新名字
+    if (data.display_name) {
+      const nameSpan = card.querySelector('.card-name span');
+      if (nameSpan) nameSpan.textContent = data.display_name;
+    }
+
+    // 更新好感度
+    const fill = card.querySelector('.aff-fill');
+    const affLabel = card.querySelectorAll('.card-aff-label')[1];
+    if (fill) fill.style.width = `${Math.min(100, data.affinity || existing.affinity || 10)}%`;
+    if (affLabel) affLabel.textContent = `${data.affinity || existing.affinity || 10}%`;
+
+    // 更新套餐区域
+    if (data.package_name) {
+      card.classList.add('paid');
+      let pkgEl = card.querySelector('.card-package');
+      if (!pkgEl) {
+        pkgEl = document.createElement('div');
+        pkgEl.className = 'card-package';
+        card.appendChild(pkgEl);
+      }
+      pkgEl.innerHTML = `
+        <span class="card-package-name">◈ ${data.package_name}</span>
+        <span class="card-countdown" data-expires="${data.paid_expires_at || 0}"></span>
+      `;
+    }
+  } else {
+    // 新增卡片
+    const cardEl = _createCustomerCard(uid, data);
+    state.customers.set(uid, { ...data, cardEl });
+    state.currentCustomer = uid;
+  }
+}
+
+function removeCustomer(uid) {
+  if (!state.customers.has(uid)) return;
+  const { cardEl } = state.customers.get(uid);
+  if (cardEl) {
+    cardEl.classList.remove('visible');
+    setTimeout(() => cardEl.remove(), 400);
+  }
+  state.customers.delete(uid);
+  if (state.currentCustomer === uid) {
+    state.currentCustomer = state.customers.size > 0
+      ? [...state.customers.keys()].pop()
+      : null;
+  }
+}
+
+// 每秒更新所有倒计时
+function tickCountdowns() {
+  const now = Math.floor(Date.now() / 1000);
+  document.querySelectorAll('.card-countdown').forEach(el => {
+    const expires = parseInt(el.dataset.expires || '0', 10);
+    if (!expires) { el.textContent = ''; return; }
+    const rem = expires - now;
+    if (rem <= 0) {
+      el.textContent = '已到期';
+      el.classList.add('expired');
+    } else {
+      const h = Math.floor(rem / 3600);
+      const m = Math.floor((rem % 3600) / 60);
+      const s = rem % 60;
+      el.textContent = h > 0
+        ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+        : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      el.classList.remove('expired');
+    }
+  });
+}
+setInterval(tickCountdowns, 1000);
+
+// 兼容旧调用
+function showCustomerPanel(name, affinity) {
+  // 由 onCheckin 直接调 addOrUpdateCustomer，此函数保留兼容
+}
+function hideCustomerPanel() {
+  // 由 onCheckout 直接调 removeCustomer，此函数保留兼容
+}
+function setAffinityBar(value) {
+  // 多客户模式下由 addOrUpdateCustomer 处理
+}
+function updateCustomerMeta() {
+  // 多客户模式下由 addOrUpdateCustomer 处理
+}
+
+function showSubtitle(text) {
+  clearTimeout(state.subtitleTimer);
+  const bar     = document.getElementById('subtitle-bar');
+  const textEl  = document.getElementById('subtitle-text');
+  textEl.textContent = text;
+  bar.classList.add('visible');
+  state.subtitleTimer = setTimeout(() => bar.classList.remove('visible'),
+                                    SCREEN_CONFIG.SUBTITLE_DURATION_MS);
+}
+
+// Confetti burst
+function spawnConfetti() {
+  const colors = ['#f0b8cc','#c9a85c','#a8e8c8','#b8d4f8','#f5d8a0'];
+  for (let i = 0; i < 42; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.cssText = `
+      left: ${20 + Math.random() * 60}%;
+      background: ${color};
+      width: ${6 + Math.random() * 8}px;
+      height: ${6 + Math.random() * 8}px;
+      border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+      animation-duration: ${1.5 + Math.random() * 2}s;
+      animation-delay: ${Math.random() * 0.4}s;
+    `;
+    document.body.appendChild(piece);
+    piece.addEventListener('animationend', () => piece.remove());
+  }
+}
+
+// ────────────────────────
+// 弹幕系统
+// ────────────────────────
+const DANMAKU_TRACKS = 6;       // 轨道数
+const DANMAKU_OPACITY = 0.45;   // 透明度
+// 群体感知：本地不做检测，弹幕由后端统一分析触发回复
+const DANMAKU_COLORS = [
+  '#ffffff','#ffccee','#cce8ff','#ccffee','#ffe8cc','#eeccff'
+];
+
+function addDanmaku(name, text) {
+  if (!text) return;
+  const layer = document.getElementById('danmaku-layer');
+  if (!layer) return;
+
+  const el = document.createElement('div');
+  const track = Math.floor(Math.random() * DANMAKU_TRACKS);
+  const topPct = 8 + track * (80 / DANMAKU_TRACKS);
+  const duration = 18 + Math.random() * 8; // 18-26秒，留足时间给LLM回复
+  const color = DANMAKU_COLORS[Math.floor(Math.random() * DANMAKU_COLORS.length)];
+  const fontSize = 15 + Math.floor(Math.random() * 5); // 15-19px
+
+  el.style.cssText = `
+    position: absolute;
+    top: ${topPct}%;
+    left: 100%;
+    white-space: nowrap;
+    font-size: ${fontSize}px;
+    color: ${color};
+    opacity: ${DANMAKU_OPACITY};
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    animation: danmaku-fly ${duration}s linear forwards;
+    pointer-events: none;
+  `;
+  el.textContent = name ? `${name}：${text}` : text;
+  layer.appendChild(el);
+  setTimeout(() => el.remove(), duration * 1000 + 1000);
+}
+
+// 注入弹幕动画 keyframe
+(function() {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes danmaku-fly {
+      from { transform: translateX(0); opacity: ${DANMAKU_OPACITY}; }
+      90%  { opacity: ${DANMAKU_OPACITY}; }
+      to   { transform: translateX(calc(-100vw - 100%)); opacity: 0; }
+    }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ────────────────────────
+// Audio — 屏幕端 TTS 引擎
+// ────────────────────────
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// 浏览器要求用户交互后才能播放音频，屏幕端无人操作所以用静默音频预热
+// 原理：播放一段极短的无声 buffer，强制 AudioContext 进入 running 状态
+function _warmupAudioContext() {
+  if (audioCtx.state === 'running') return;
+  const buf = audioCtx.createBuffer(1, 1, 22050);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(audioCtx.destination);
+  src.start(0);
+  audioCtx.resume().catch(() => {});
+  console.log('[Audio] AudioContext 预热完成，状态:', audioCtx.state);
+}
+
+// 页面加载后立即尝试，以及监听任何用户交互
+_warmupAudioContext();
+['click','touchstart','keydown','mousemove'].forEach(evt => {
+  document.addEventListener(evt, _warmupAudioContext, { once: false });
+});
+
+// 麦克风口型同步已禁用
+let _micMouthValue = 0;
+
+// 启动时拉取 TTS 参考音频配置（SoVITS V3 要求 prompt_text 非空）
+// 启动时从后端恢复在店客户卡片（防止刷新后卡片消失）
+async function restoreCustomersFromStatus() {
+  if (!SCREEN_CONFIG.SCREEN_JWT) return;
+  try {
+    const resp = await fetch('/api/s/customers', {
+      headers: { 'Authorization': 'Bearer ' + SCREEN_CONFIG.SCREEN_JWT }
+    });
+    if (!resp.ok) return;
+    const body = await resp.json();
+    if (body.code !== 200 || !body.data.list) return;
+    const customers = body.data.list;
+    if (customers.length === 0) return;
+
+    customers.forEach(c => {
+      addOrUpdateCustomer(c.user_id_masked, {
+        display_name:    c.display_name,
+        affinity:        c.affinity,
+        package_name:    c.package_name || '',
+        paid_expires_at: c.paid_expires_at || 0,
+      });
+    });
+
+    // 有在店客户，隐藏待机时钟
+    document.getElementById('idle-clock').classList.add('hidden');
+    document.getElementById('live2d-wrap').classList.remove('idle-dim');
+    console.log(`[Status] 恢复 ${customers.length} 位在店客户`);
+  } catch(e) {
+    console.warn('[Status] 恢复客户状态失败:', e);
+  }
+}
+
+async function fetchTTSConfig() {
+  if (!SCREEN_CONFIG.SCREEN_JWT) return;
+  try {
+    const resp = await fetch('/api/s/tts-config', {
+      headers: { 'Authorization': 'Bearer ' + SCREEN_CONFIG.SCREEN_JWT }
+    });
+    if (!resp.ok) return;
+    const body = await resp.json();
+    if (body.code === 200 && body.data) {
+      state.ttsConfig = {
+        ref_audio_path: body.data.ref_audio_path || '',
+        prompt_text:    body.data.prompt_text    || '',
+        prompt_lang:    body.data.prompt_lang    || 'zh',
+        text_lang:      body.data.text_lang      || 'zh',
+      };
+      console.log('[TTS-Config] 参考音频配置已加载 |',
+        state.ttsConfig.ref_audio_path.slice(-30));
+    }
+  } catch(e) {
+    console.warn('[TTS-Config] 拉取失败，将使用空 prompt_text:', e);
+  }
+}
+
+// ────────────────────────
+// Audio — 屏幕端 TTS 引擎
+// ────────────────────────
+// 直接播放已生成的音频 URL（套餐用户对话语音，asset_service 推来的）
+async function _playVoiceUrl(url) {
+  if (!url) return;
+  if (audioCtx.state === 'suspended') {
+    try { await audioCtx.resume(); } catch(_) {}
+  }
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) { console.warn('[Screen-Voice] 获取音频失败 HTTP', resp.status); return; }
+    const buf = await resp.arrayBuffer();
+    let decoded;
+    try {
+      decoded = await audioCtx.decodeAudioData(buf);
+    } catch(decodeErr) {
+      console.warn('[TTS] 音频解码失败，跳过:', decodeErr.message);
+      return;  // 直接 return，让 drainTTSQueue finally 释放锁
+    }
+    const src     = audioCtx.createBufferSource();
+    src.buffer    = decoded;
+
+    // 口型同步
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.3;
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    let lipSyncRaf = null;
+    function lipSyncTick() {
+      analyser.getByteFrequencyData(dataArray);
+      const avg = dataArray.slice(1, 20).reduce((a, b) => a + b, 0) / 19;
+      const mouthOpen = avg < 5 ? 0 : Math.min(1, (avg - 5) / 80);
+      const vrm = state.live2dModel;
+      const param = SCREEN_CONFIG.VRM_MOUTH_PARAM || 'JawOpen';
+      if (vrm && vrm.expressionManager) {
+        try { vrm.expressionManager.setValue(param, mouthOpen); } catch(_) {}
+      }
+      lipSyncRaf = requestAnimationFrame(lipSyncTick);
+    }
+
+    // 播放期间切到 talk 动作，锁定不回 idle
+    playMotion('talk');
+    lipSyncRaf = requestAnimationFrame(lipSyncTick);
+
+    src.onended = () => {
+      cancelAnimationFrame(lipSyncRaf);
+      const vrm = state.live2dModel;
+      const param = SCREEN_CONFIG.VRM_MOUTH_PARAM || 'JawOpen';
+      if (vrm && vrm.expressionManager) {
+        try { vrm.expressionManager.setValue(param, 0); } catch(_) {}
+      }
+      playMotion('idle');
+      console.log('[Screen-Voice] 播放完成');
+    };
+    setTimeout(() => { if (lipSyncRaf) { cancelAnimationFrame(lipSyncRaf); playMotion('idle'); } }, (decoded.duration + 2) * 1000);
+    if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+    src.start(0);
+  } catch(e) {
+    console.warn('[Screen-Voice] 播放失败，静默跳过:', e);
+  }
+}
+
+// TTS 请求队列：同时只发一个请求给 GPT-SoVITS，防止并发打爆显存
+const ttsQueue = [];
+let ttsPlaying = false;
+
+function enqueueTTS(text, motion, expression) {
+  if (!text || !SCREEN_CONFIG.TTS_URL) return;
+  ttsQueue.push({ text, motion: motion || null, expression: expression || null });
+  if (!ttsPlaying) drainTTSQueue();
+}
+
+async function drainTTSQueue() {
+  if (ttsPlaying || ttsQueue.length === 0) return;
+  ttsPlaying = true;
+  const item = ttsQueue.shift();
+  try {
+    await playTTS(item.text, item.motion, item.expression);
+  } catch(e) {
+    console.warn('[TTS-Queue] 播放异常:', e);
+  } finally {
+    ttsPlaying = false;
+    if (ttsQueue.length > 0) drainTTSQueue();
+  }
+}
+
+async function playTTS(text, motion, expression) {
+  if (!text || !SCREEN_CONFIG.TTS_URL) return;
+
+  // 确保 AudioContext 处于运行状态
+  if (audioCtx.state === 'suspended') {
+    try { await audioCtx.resume(); } catch(_) {}
+  }
+
+  console.log('[TTS] 开始合成 |', text.slice(0, 15), '| prompt_text:', !!state.ttsConfig.prompt_text);
+  try {
+    const resp = await fetch(SCREEN_CONFIG.TTS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text:           text,
+        text_lang:      state.ttsConfig.text_lang      || SCREEN_CONFIG.TTS_LANG || 'zh',
+        ref_audio_path: state.ttsConfig.ref_audio_path || '',
+        prompt_text:    state.ttsConfig.prompt_text    || '',
+        prompt_lang:    state.ttsConfig.prompt_lang    || SCREEN_CONFIG.TTS_LANG || 'zh',
+        streaming_mode: 0,   // 非流式，完整返回 wav，避免并发显存冲突
+        media_type:     'wav',
+        top_k:          15,
+        top_p:          0.8,
+        temperature:    0.8,
+        speed_factor:   1.0,      })
+    });
+    console.log('[TTS] HTTP 响应:', resp.status);
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      console.warn('[TTS] 生成失败 HTTP', resp.status, errText);
+      return;
+    }
+    const buf     = await resp.arrayBuffer();
+    const decoded = await audioCtx.decodeAudioData(buf);
+    const src     = audioCtx.createBufferSource();
+    src.buffer    = decoded;
+
+    // 口型同步
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.6;
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    src.connect(analyser);
+    analyser.connect(audioCtx.destination);
+
+    let lipSyncRaf = null;
+
+    function lipSyncTick() {
+      analyser.getByteFrequencyData(dataArray);
+      const voiceBins = dataArray.slice(1, 20);
+      const avg = voiceBins.reduce((a, b) => a + b, 0) / voiceBins.length;
+      const mouthOpen = avg < 10 ? 0 : Math.min(1, (avg - 10) / 120);
+      const vrm = state.live2dModel;
+      const param = SCREEN_CONFIG.VRM_MOUTH_PARAM || 'JawOpen';
+      if (vrm && vrm.expressionManager) {
+        try { vrm.expressionManager.setValue(param, mouthOpen); } catch(_) {}
+      }
+      lipSyncRaf = requestAnimationFrame(lipSyncTick);
+    }
+
+    // TTS 开始播放时触发动作（motion 由调用方传入，默认 talk）
+    if (motion) {
+      playMotion(motion);
+    } else {
+      const prevM = state.live2dCurrentMotion || 'idle';
+      if (prevM === 'idle') playMotion('talk');
+    }
+    lipSyncRaf = requestAnimationFrame(lipSyncTick);
+
+    if (audioCtx.state === 'suspended') await audioCtx.resume().catch(() => {});
+    await new Promise(resolve => {
+      // 超时保护：音频时长 + 5秒后强制 resolve，防止 onended 不触发导致队列卡死
+      const duration = decoded.duration || 10;
+      const timeout  = setTimeout(() => {
+        console.warn('[TTS] onended 超时，强制释放队列');
+        cancelAnimationFrame(lipSyncRaf);
+        playMotion('idle');
+        resolve();
+      }, (duration + 5) * 1000);
+
+      src.onended = () => {
+        clearTimeout(timeout);
+        cancelAnimationFrame(lipSyncRaf);
+        const vrm = state.live2dModel;
+        const param = SCREEN_CONFIG.VRM_MOUTH_PARAM || 'JawOpen';
+        if (vrm && vrm.expressionManager) {
+          try { vrm.expressionManager.setValue(param, 0); } catch(_) {}
+        }
+        playMotion('idle');
+        console.log('[TTS] 播放完成 |', text.slice(0, 20));
+        resolve();
+      };
+      src.start(0);
+      // resume 在 Promise 外已处理
+    });
+
+  } catch(e) {
+    console.warn('[TTS] 播放失败，静默跳过:', e);
+  }
+}
+
+// 每次用户交互都尝试恢复 AudioContext（不用 once，持续监听）
+document.addEventListener('click', () => {
+  if (audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+});
+
+// ────────────────────────
+// Init
+// ────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // screen_init 必须最先完成：JWT、model_url、店铺配置全部来自这里
+  const ok = await fetchScreenInit();
+  if (!ok) {
+    console.warn('[Screen-Init] 初始化失败，1分钟后重试');
+    setTimeout(fetchScreenInit, 60 * 1000);
+    return;
+  }
+  // JWT 就绪后依次初始化各模块
+  fetchTTSConfig();       // 需要 SCREEN_JWT
+  refreshQR();            // 需要 STORE_TOKEN_URL（由 screen_init 填充）
+  initLive2D();           // 需要 LIVE2D_MODEL_URL
+  restoreCustomersFromStatus();
+});
+</script>
+
+<!-- VRM 渲染库 — 本地文件，ES Module，three r158 + three-vrm v2 -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "/static/three.module.js",
+    "three/addons/": "/static/",
+    "@pixiv/three-vrm": "/static/three-vrm.module.js",
+    "@pixiv/three-vrm-animation": "/static/three-vrm-animation.module.js"
+  }
+}
+</script>
+<script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/GLTFLoader.js';
+  import * as THREE_VRM from '@pixiv/three-vrm';
+  import * as THREE_VRM_ANIM from '@pixiv/three-vrm-animation';
+  window.THREE = Object.assign({}, THREE, { GLTFLoader });
+  window.THREE_VRM = THREE_VRM;
+  window.THREE_VRM_ANIM = THREE_VRM_ANIM;
+  console.log('[VRM] 渲染库就绪 | THREE_VRM:', !!window.THREE_VRM, '| THREE_VRM_ANIM:', !!window.THREE_VRM_ANIM);
+  window.dispatchEvent(new Event('vrm-ready'));
+</script>
+
+<!-- 弹幕层 -->
+<div id="danmaku-layer" style="
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  pointer-events:none; overflow:hidden; z-index:50;
+"></div>
+
+<!-- QRious for QR code generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+
+</body>
+</html>

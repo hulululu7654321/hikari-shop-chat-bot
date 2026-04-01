@@ -1,0 +1,38 @@
+{
+  "pages": [
+    "pages/shop/shop",
+    "pages/index/index",
+    "pages/chat/chat",
+    "pages/invite/invite",
+    "pages/checkin/checkin",
+    "pages/report/report"
+  ],
+  "subPackages": [
+    {
+      "root": "pages/manage",
+      "name": "manage",
+      "pages": [
+        "manage",
+        "store/index",
+        "admin/index",
+        "admin/users",
+        "admin/invites",
+        "admin/packages",
+        "admin/buyer_profiles",
+        "admin/orders",
+        "admin/store",
+        "admin/roles"
+      ]
+    }
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "希卡莉终端",
+    "navigationBarTextStyle": "black"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents",
+  "__usePrivacyCheck__": false
+}

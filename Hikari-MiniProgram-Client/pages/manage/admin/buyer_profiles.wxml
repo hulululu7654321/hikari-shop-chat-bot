@@ -1,0 +1,108 @@
+<!-- pages/manage/admin/buyer_profiles.wxml — 套餐买家画像页 -->
+<view class="page">
+
+  <!-- 顶部套餐信息栏 -->
+  <view class="pkg-header" wx:if="{{packageInfo}}">
+    <view class="pkg-header-main">
+      <text class="pkg-header-name">{{packageName}}</text>
+      <view class="pkg-header-type {{packageInfo.type}}">
+        <text>{{packageInfo.type === 'online' ? '线上VIP' : '到店'}}</text>
+      </view>
+    </view>
+    <text class="pkg-header-sub">¥{{packageInfo.price}} · 共 {{total}} 位买家</text>
+  </view>
+
+  <!-- 加载中 -->
+  <view wx:if="{{loading && buyers.length === 0}}" class="loading-tip">
+    <text>加载中…</text>
+  </view>
+
+  <!-- 空状态 -->
+  <view wx:elif="{{!loading && buyers.length === 0}}" class="empty-tip">
+    <text>该套餐暂无购买记录</text>
+  </view>
+
+  <!-- 买家总览表格 -->
+  <view wx:else class="section">
+    <view class="section-header">
+      <text class="section-title">买家总览</text>
+      <text class="buyer-count">共 {{total}} 人</text>
+    </view>
+
+    <!-- 横向滚动表格 -->
+    <scroll-view scroll-x class="table-scroll">
+      <view class="table">
+        <!-- 表头 -->
+        <view class="table-row table-head">
+          <text class="col-idx">#</text>
+          <text class="col-name">用户名</text>
+          <text class="col-vip">VIP</text>
+          <text class="col-num">对话数</text>
+          <text class="col-num">到店次</text>
+          <text class="col-num">购买次</text>
+          <text class="col-money">消费(¥)</text>
+          <text class="col-time">最后活跃</text>
+        </view>
+
+        <!-- 数据行 -->
+        <view
+          wx:for="{{buyers}}"
+          wx:key="user_id"
+          class="table-row {{index % 2 === 1 ? 'row-alt' : ''}}"
+        >
+          <text class="col-idx">{{index + 1}}</text>
+          <text class="col-name">{{item.user_name || item.user_id}}</text>
+          <text class="col-vip vip-{{item.vip_level}}">
+            {{item.vip_level === 2 ? 'SVIP' : item.vip_level === 1 ? 'VIP' : '-'}}
+          </text>
+          <text class="col-num">{{item.total_interactions || 0}}</text>
+          <text class="col-num">{{item.store_visit_count || 0}}</text>
+          <text class="col-num">{{item.order_count || 0}}</text>
+          <text class="col-money">{{item.total_spent || 0}}</text>
+          <text class="col-time">{{item.last_active_at ? item.last_active_at.slice(0,10) : 'N/A'}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- 上拉加载更多提示 -->
+    <view wx:if="{{hasMore}}" class="load-more-tip">
+      <text>{{loading ? '加载中…' : '上拉加载更多'}}</text>
+    </view>
+    <view wx:elif="{{!hasMore && buyers.length > 0}}" class="load-more-tip">
+      <text>已显示全部 {{total}} 位买家</text>
+    </view>
+  </view>
+
+  <!-- 导出区域 -->
+  <view class="export-section" wx:if="{{buyers.length > 0}}">
+    <view class="export-desc">
+      <text class="export-desc-text">导出包含：基础信息 · 消费记录 · 全量画像碎片（facts）</text>
+      <text class="export-desc-sub">原始数据，不经 LLM 处理，MD 格式 · 自动保存到本地</text>
+    </view>
+
+    <!-- 导出按钮：无本地缓存时显示 -->
+    <view wx:if="{{!localFilePath}}"
+      class="export-btn {{exporting || saving ? 'btn-loading' : ''}}"
+      bindtap="exportPortrait"
+    >
+      <text>{{exporting ? '生成中…' : saving ? '保存中…' : '导出买家画像 MD'}}</text>
+    </view>
+
+    <!-- 已有本地文件：显示打开 + 重新导出 -->
+    <view wx:if="{{localFilePath}}" class="export-result">
+      <view class="export-result-info">
+        <text class="export-result-label">已保存到本地：</text>
+        <text class="export-result-file">{{exportedFile}}</text>
+      </view>
+      <view class="export-result-actions">
+        <view class="open-btn" bindtap="openLocalFile">
+          <text>打开文件</text>
+        </view>
+        <view class="reexport-btn" bindtap="clearLocalCache">
+          <text>重新导出</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+</view>

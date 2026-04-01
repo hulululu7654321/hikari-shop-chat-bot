@@ -1,0 +1,54 @@
+<view class="page">
+
+  <!-- 生成区 -->
+  <view class="gen-card">
+    <text class="card-title">生成邀请码</text>
+    <view class="gen-row">
+      <view class="gen-field">
+        <text class="field-label">数量</text>
+        <input class="field-input" type="number" value="{{genCount}}" bindinput="onCountInput" placeholder="5" />
+      </view>
+      <view class="gen-field flex2">
+        <text class="field-label">备注</text>
+        <input class="field-input" value="{{genNote}}" bindinput="onNoteInput" placeholder="发给谁（可选）" />
+      </view>
+      <view class="gen-btn {{generating?'disabled':''}}" bindtap="generate">
+        <text>{{generating?'生成中…':'生成'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 筛选 -->
+  <view class="filter-row">
+    <picker bindchange="onFilterChange" value="{{statusIndex}}" range="{{statusLabels}}">
+      <view class="filter-picker">
+        <text>{{statusLabels[statusIndex]}}</text>
+        <text class="arrow">▼</text>
+      </view>
+    </picker>
+    <text class="list-count">共 {{list.length}} 条</text>
+  </view>
+
+  <!-- 列表 -->
+  <view wx:if="{{loading}}" class="loading-tip"><text>加载中…</text></view>
+  <view wx:elif="{{list.length===0}}" class="empty-tip"><text>暂无记录</text></view>
+
+  <view wx:for="{{list}}" wx:key="code" class="invite-item">
+    <view class="invite-top">
+      <text class="invite-code" bindtap="copyCode" data-code="{{item.code}}">{{item.code}}</text>
+      <text class="invite-status {{item.status}}">{{item.status}}</text>
+    </view>
+    <view class="invite-meta">
+      <text>创建 {{item.created_at_fmt}}</text>
+      <text wx:if="{{item.note}}" class="invite-note">{{item.note}}</text>
+    </view>
+    <view class="invite-meta" wx:if="{{item.status==='used'}}">
+      <text>使用 {{item.used_at_fmt}}</text>
+    </view>
+    <view class="invite-meta" wx:elif="{{item.status==='unused'}}">
+      <text>过期 {{item.expires_at_fmt}}</text>
+      <view class="revoke-btn" bindtap="revoke" data-code="{{item.code}}">作废</view>
+    </view>
+  </view>
+
+</view>

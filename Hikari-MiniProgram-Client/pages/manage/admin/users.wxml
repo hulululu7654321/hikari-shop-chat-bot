@@ -1,0 +1,112 @@
+<view class="page">
+
+  <!-- 搜索框 -->
+  <view class="search-bar">
+    <input class="search-input" placeholder="输入昵称搜索用户" value="{{keyword}}"
+           bindinput="onInput" bindconfirm="search" confirm-type="search" />
+    <view class="search-btn {{searching?'loading':''}}" bindtap="search">
+      <text>{{searching ? '…' : '搜索'}}</text>
+    </view>
+  </view>
+
+  <!-- [Fix] 激活状态筛选器 -->
+  <view class="filter-bar">
+    <picker range="{{accessFilterLabels}}" value="{{accessFilterIndex}}" bindchange="onAccessFilterChange">
+      <view class="filter-picker">
+        <text class="filter-label">{{accessFilterLabels[accessFilterIndex]}}</text>
+        <text class="arrow">▼</text>
+      </view>
+    </picker>
+  </view>
+
+  <!-- 搜索结果 -->
+  <view wx:if="{{!selected && results.length > 0}}" class="results">
+    <view wx:for="{{results}}" wx:key="user_id" class="result-item"
+          bindtap="selectUser" data-uid="{{item.user_id}}">
+      <view class="result-left">
+        <view class="result-name-row">
+          <text class="result-name">{{item.user_name || '匿名Coser'}}</text>
+          <text class="result-uid">…{{item.user_id_tail}}</text>
+        </view>
+        <text class="result-meta">好感度 {{item.affinity}}{{item.vip_level > 0 ? ' · VIP' : ''}}{{item.has_access ? '' : ' · 未激活'}}</text>
+      </view>
+      <text class="result-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 用户详情 -->
+  <view wx:if="{{detailLoading}}" class="loading-tip"><text>加载中…</text></view>
+
+  <view wx:elif="{{selected}}" class="detail-wrap">
+    <view class="detail-header">
+      <view class="back-btn" bindtap="clearSelected"><text>← 返回</text></view>
+      <text class="detail-name">{{selected.user.user_name || '匿名Coser'}}</text>
+    </view>
+
+    <!-- 基本信息 -->
+    <view class="info-card">
+      <view class="info-row"><text class="info-key">好感度</text><text class="info-val">{{selected.user.affinity}}</text></view>
+      <view class="info-row"><text class="info-key">访问权限</text><text class="info-val {{selected.user.has_access?'green':'red'}}">{{selected.user.has_access ? '已激活' : '未激活'}}</text></view>
+      <view class="info-row"><text class="info-key">来源</text><text class="info-val">{{selected.user.access_source || '—'}}</text></view>
+      <view class="info-row"><text class="info-key">激活时间</text><text class="info-val">{{selected.user.access_granted_at || '—'}}</text></view>
+      <view class="info-row"><text class="info-key">到店次数</text><text class="info-val">{{selected.user.store_visit_count || 0}}</text></view>
+      <view class="info-row"><text class="info-key">注册时间</text><text class="info-val">{{selected.user.created_at}}</text></view>
+      <view class="info-row"><text class="info-key">今日消息</text><text class="info-val">{{selected.today_msg_count}} 条</text></view>
+    </view>
+
+    <!-- VIP 状态 -->
+    <view class="info-card">
+      <view class="info-row">
+        <text class="info-key">VIP 状态</text>
+        <text class="info-val {{selected.vip.is_vip?'green':''}}">
+          {{selected.vip.is_vip ? (selected.vip.vip_level === 2 ? 'SVIP' : 'VIP') : '普通用户'}}
+          {{selected.vip.is_expired ? '（已过期）' : ''}}
+        </text>
+      </view>
+      <view class="info-row" wx:if="{{selected.user.vip_expires_at}}">
+        <text class="info-key">到期时间</text>
+        <text class="info-val">{{selected.user.vip_expires_at || '永久'}}</text>
+      </view>
+    </view>
+
+    <!-- 最近订单 -->
+    <view class="info-card" wx:if="{{selected.recent_orders.length > 0}}">
+      <text class="card-title">最近订单</text>
+      <view wx:for="{{selected.recent_orders}}" wx:key="order_id" class="mini-order">
+        <text class="mini-order-name">{{item.package_name}}</text>
+        <text class="mini-order-price">¥{{item.amount}}</text>
+        <text class="mini-order-time">{{item.created_at}}</text>
+      </view>
+    </view>
+
+    <!-- 操作按钮 -->
+    <view class="action-row">
+      <view class="action-btn green" bindtap="openVipModal">授予VIP</view>
+      <view class="action-btn gray"  wx:if="{{selected.vip.is_vip}}" bindtap="revokeVip">撤销VIP</view>
+      <view class="action-btn red"   bindtap="kickUser">踢出</view>
+    </view>
+  </view>
+
+  <!-- VIP 授权弹窗 -->
+  <view wx:if="{{showVipModal}}" class="modal-mask" bindtap="closeVipModal">
+    <view class="modal-box" catchtap="noop">
+      <text class="modal-title">授予 VIP</text>
+      <view class="modal-form">
+        <text class="form-label">等级</text>
+        <picker range="{{['VIP','SVIP']}}" bindchange="onVipLevelChange" value="{{vipLevel===1?0:1}}">
+          <view class="picker-row">
+            <text>{{vipLevel === 1 ? 'VIP' : 'SVIP'}}</text>
+            <text class="arrow">▼</text>
+          </view>
+        </picker>
+        <text class="form-label mt">天数（0=永久）</text>
+        <input class="modal-input" type="number" value="{{vipDays}}" bindinput="onVipDaysInput" placeholder="30" />
+      </view>
+      <view class="modal-btns">
+        <view class="modal-btn cancel" bindtap="closeVipModal"><text>取消</text></view>
+        <view class="modal-btn confirm" bindtap="grantVip"><text>确认授予</text></view>
+      </view>
+    </view>
+  </view>
+
+</view>

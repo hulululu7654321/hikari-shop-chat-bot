@@ -1,0 +1,117 @@
+<view class="page">
+
+  <!-- Tab 导航 -->
+  <view class="tab-bar">
+    <view class="tab {{tab==='customers'?'active':''}}" bindtap="switchTab" data-tab="customers">在店客户</view>
+    <view class="tab {{tab==='order'?'active':''}}"     bindtap="switchTab" data-tab="order">确认下单</view>
+    <view class="tab {{tab==='orders'?'active':''}}"    bindtap="switchTab" data-tab="orders">今日订单</view>
+  </view>
+
+  <!-- ① 在店客户 -->
+  <view wx:if="{{tab==='customers'}}" class="tab-content">
+    <view class="refresh-row">
+      <text class="section-title">当前在店（{{customers.length}}人）</text>
+      <view class="refresh-btn" bindtap="onRefreshCustomers">
+        <text>{{customersLoading ? '刷新中…' : '刷新'}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{customers.length === 0 && !customersLoading}}" class="empty-tip">
+      <text>暂无在店客户喵</text>
+    </view>
+
+    <view wx:for="{{customers}}" wx:key="user_id" class="customer-card" bindtap="selectCustomer" data-customer="{{item}}">
+      <view class="customer-info">
+        <text class="customer-name">{{item.display_name}}</text>
+        <text class="customer-aff">好感度 {{item.affinity}}</text>
+        <text wx:if="{{item.vip_level > 0}}" class="vip-tag">VIP</text>
+      </view>
+      <view class="customer-action">
+        <text class="action-text">下单 ›</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- ② 确认下单 -->
+  <view wx:if="{{tab==='order'}}" class="tab-content">
+
+    <!-- 客户选择 -->
+    <view class="form-section">
+      <text class="form-label">客户</text>
+      <view wx:if="{{selectedUser}}" class="selected-user">
+        <text class="selected-name">{{selectedUser.display_name}}</text>
+        <view class="clear-btn" bindtap="clearUser"><text>更换</text></view>
+      </view>
+      <view wx:else class="no-user-tip" bindtap="switchTab" data-tab="customers">
+        <text>← 请在「在店客户」中选择</text>
+      </view>
+    </view>
+
+    <!-- 套餐选择 -->
+    <view class="form-section">
+      <text class="form-label">套餐</text>
+      <view wx:if="{{packages.length === 0}}" class="empty-tip">
+        <text>暂无上架套餐</text>
+      </view>
+      <view wx:for="{{packages}}" wx:key="package_id"
+            class="pkg-item {{selectedPkg && selectedPkg.package_id === item.package_id ? 'selected' : ''}}"
+            bindtap="selectPackage" data-pkg="{{item}}">
+        <view class="pkg-info">
+          <text class="pkg-name">{{item.name}}</text>
+          <text class="pkg-desc" wx:if="{{item.description}}">{{item.description}}</text>
+          <text wx:if="{{item.screen_minutes > 0}}" class="pkg-badge">屏幕 {{item.screen_minutes}}min</text>
+        </view>
+        <text class="pkg-price">¥{{item.price}}</text>
+      </view>
+    </view>
+
+    <!-- 支付方式 -->
+    <view class="form-section">
+      <text class="form-label">支付方式</text>
+      <picker bindchange="onPayMethodChange" value="{{payMethodIndex}}" range="{{payMethodLabels}}">
+        <view class="picker-row">
+          <text>{{payMethodLabels[payMethodIndex]}}</text>
+          <text class="arrow">▼</text>
+        </view>
+      </picker>
+    </view>
+
+    <!-- 备注 -->
+    <view class="form-section">
+      <text class="form-label">备注（可选）</text>
+      <input class="note-input" placeholder="如：指定摄影师" value="{{orderNote}}" bindinput="onNoteInput" maxlength="100" />
+    </view>
+
+    <view class="submit-btn {{orderSubmitting || !selectedUser || !selectedPkg ? 'disabled' : 'active'}}"
+          bindtap="submitOrder">
+      <text>{{orderSubmitting ? '提交中…' : '确认下单'}}</text>
+    </view>
+  </view>
+
+  <!-- ③ 今日订单 -->
+  <view wx:if="{{tab==='orders'}}" class="tab-content">
+    <view class="refresh-row">
+      <text class="section-title">今日订单（{{orders.length}}笔）</text>
+      <view class="refresh-btn" bindtap="_loadOrders">
+        <text>{{ordersLoading ? '刷新中…' : '刷新'}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{orders.length === 0 && !ordersLoading}}" class="empty-tip">
+      <text>今日暂无订单喵</text>
+    </view>
+
+    <view wx:for="{{orders}}" wx:key="order_id" class="order-card">
+      <view class="order-top">
+        <text class="order-pkg">{{item.package_name}}</text>
+        <text class="order-price">¥{{item.amount}}</text>
+      </view>
+      <view class="order-bottom">
+        <text class="order-time">{{item.created_at_fmt}}</text>
+        <text class="order-pay">{{item.payment_method}}</text>
+        <text wx:if="{{item.note}}" class="order-note">{{item.note}}</text>
+      </view>
+    </view>
+  </view>
+
+</view>

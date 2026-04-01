@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>希卡莉签到</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #07C160;
+      font-family: -apple-system, sans-serif;
+      color: #fff;
+    }
+    .icon { font-size: 64px; margin-bottom: 16px; }
+    .title { font-size: 22px; font-weight: bold; margin-bottom: 8px; }
+    .sub { font-size: 14px; opacity: 0.85; }
+  </style>
+  <!-- 微信 JS-SDK，用于跳转小程序 -->
+  <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+</head>
+<body>
+  <div class="icon">🐱</div>
+  <div class="title">希卡莉签到中...</div>
+  <div class="sub">正在跳转小程序喵</div>
+
+  <script>
+    (function() {
+      // 从 URL 参数里取 store_token
+      var params = new URLSearchParams(location.search);
+      var token = params.get('store_token') || params.get('token');
+
+      if (!token) {
+        document.querySelector('.title').textContent = '二维码已失效';
+        document.querySelector('.sub').textContent = '请扫店内最新的二维码喵～';
+        return;
+      }
+
+      // 跳转小程序签到页
+      wx.miniProgram.navigateTo({
+        url: '/pages/checkin/checkin?store_token=' + encodeURIComponent(token),
+        fail: function() {
+          // 非微信环境 fallback：提示用微信扫码
+          document.querySelector('.title').textContent = '请用微信扫码';
+          document.querySelector('.sub').textContent = '在微信中打开才能完成签到喵';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

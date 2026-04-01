@@ -1,0 +1,47 @@
+<view class="invite-container">
+
+  <view class="invite-logo">
+    <image src="/assets/images/hikari.png" mode="aspectFill" class="invite-avatar" />
+  </view>
+
+  <view class="invite-title">希卡莉终端</view>
+  <view class="invite-sub">{{subTitle}}</view>
+
+  <!-- 宽限期到期：只显示提示，不显示输入框 -->
+  <view wx:if="{{isVisitExpired}}" class="expired-hint">
+    <text class="expired-icon">🔒</text>
+    <text class="expired-text">请联系管理员获取邀请码喵</text>
+  </view>
+
+  <!-- 正常邀请码输入 -->
+  <view wx:else class="invite-form">
+    <view class="invite-input-wrap {{errMsg ? 'input-error' : ''}}">
+      <input
+        class="invite-input"
+        placeholder="输入邀请码喵"
+        placeholder-style="color: #94A3B8; font-size: 30rpx;"
+        value="{{inputCode}}"
+        bindinput="onInput"
+        maxlength="20"
+        confirm-type="done"
+        bindconfirm="activate"
+      />
+    </view>
+    <view class="invite-err" wx:if="{{errMsg}}">
+      <text class="invite-err-text">{{errMsg}}</text>
+    </view>
+  </view>
+
+  <view
+    wx:if="{{!isVisitExpired}}"
+    class="invite-btn {{isSubmitting || !inputCode ? 'btn-disabled' : 'btn-active'}}"
+    bindtap="activate"
+  >
+    <text>{{isSubmitting ? '激活中…' : '激活'}}</text>
+  </view>
+
+  <view class="invite-hint">
+    <text>没有邀请码？联系管理员获取</text>
+  </view>
+
+</view>
