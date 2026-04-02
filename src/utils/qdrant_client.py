@@ -183,30 +183,38 @@ async def deactivate_vector(fact_id: str) -> bool:
         return False
 
 
-async def get_user_vectors(user_id: str, with_vectors: bool = False) -> list[dict]:
+async def get_user_vectors(user_id: str, with_vectors: bool = False, category: str | None = None) -> list[dict]:
     """
     全量读取用户的所有活跃向量（memoir_exporter / fact_extractor 冲突检测用）。
     不分页，适合单用户数据量（通常 < 200 条）。
 
     with_vectors=False（默认）：只拉 payload，不拉向量数据，约节省 4MB/次。
     with_vectors=True：同时拉向量，用于本地余弦冲突检测。
+    category：不为 None 时只拉该分类的向量，减少 Qdrant 传输量。
     """
     try:
+        must_conditions = [
+            qmodels.FieldCondition(
+                key="user_id",
+                match=qmodels.MatchValue(value=user_id),
+            ),
+            qmodels.FieldCondition(
+                key="is_active",
+                match=qmodels.MatchValue(value=True),
+            ),
+        ]
+        if category is not None:
+            must_conditions.append(
+                qmodels.FieldCondition(
+                    key="category",
+                    match=qmodels.MatchValue(value=category),
+                )
+            )
+
         def _scroll():
             results, _ = get_qdrant().scroll(
                 collection_name=QDRANT_COLLECTION,
-                scroll_filter=qmodels.Filter(
-                    must=[
-                        qmodels.FieldCondition(
-                            key="user_id",
-                            match=qmodels.MatchValue(value=user_id),
-                        ),
-                        qmodels.FieldCondition(
-                            key="is_active",
-                            match=qmodels.MatchValue(value=True),
-                        ),
-                    ]
-                ),
+                scroll_filter=qmodels.Filter(must=must_conditions),
                 limit=500,   # 单用户上限，超过时取最近的
                 with_payload=True,
                 with_vectors=with_vectors,

@@ -42,6 +42,18 @@ from src.core.hikari_prompts import PERSONA_SENSING_PROMPT_TEMPLATE
 
 logger = get_logger(__name__)
 
+# audit_buffer 阈值配置
+# ⚠️ 两个常量必须满足：_AUDIT_BUFFER_FLUSH_SIZE <= _AUDIT_BUFFER_MAX_SIZE
+# 如果调大 FLUSH_SIZE，必须同步调大 MAX_SIZE，否则 $slice 会在 flush 前截断旧消息
+_AUDIT_BUFFER_FLUSH_SIZE = 3   # buffer 积累到此条数时触发 flush（len(buffer) >= N）
+_AUDIT_BUFFER_MAX_SIZE   = 10  # $slice 保留的最大条数，需大于等于 FLUSH_SIZE
+
+# 单 category 向量数软上限
+# 超过此值时，_conflict_check_and_sink 写入前先对该 category 执行一次局部整合。
+# 正常运行下（AutoDream 每日整合）几乎不会触发；
+# 主要防御场景：DREAM_ENABLED=false 长期关闭 + 重度用户高频使用。
+_CAT_VECTOR_LIMIT = 30
+
 # 内部实名提取 Prompt
 IDENTITY_PROMPT_INTERNAL = """你是一个专业的 CN 提取专家。从文本中提取用户的【姓名/CN/昵称】。
 ⚠️ 严格红线：严禁提取 AI 助手（希卡莉/Hikari/本喵）的名字，严禁提取讨论的动漫/影视角色名。
@@ -204,19 +216,31 @@ class FactExtractor:
 
                 try:
                     db = self.db_manager.db
-                    session_doc = await db[COL_SESSIONS].find_one(
-                        {"session_id": session_id}
-                    )
-                    buffer = session_doc.get("audit_buffer", []) if session_doc else []
 
                     # 语义提纯：记录"希卡莉看到的画面内容"，不记录物理 UUID
                     msg_context = user_text
                     if vision_desc:
                         msg_context = f"【画面感知：{vision_desc}】\n用户消息: {user_text}"
 
-                    buffer.append(f"会话: {msg_context}")
+                    # 原子追加（$push + $slice），替代旧的 find_one + Python append + $set 全量替换。
+                    # $slice 保留最近 _AUDIT_BUFFER_MAX_SIZE 条，防止 buffer 无上限增长导致敏感消息长期驻留。
+                    # return_document=True 返回更新后文档，供后续 len 判断，比原来少一次 RTT。
+                    updated = await db[COL_SESSIONS].find_one_and_update(
+                        {"session_id": session_id},
+                        {
+                            "$push": {
+                                "audit_buffer": {
+                                    "$each":  [f"会话: {msg_context}"],
+                                    "$slice": -_AUDIT_BUFFER_MAX_SIZE,
+                                }
+                            }
+                        },
+                        upsert=True,
+                        return_document=True,
+                    )
+                    buffer = updated.get("audit_buffer", []) if updated else [f"会话: {msg_context}"]
 
-                    if vision_desc or is_anonymous or (len(buffer) >= 3):
+                    if vision_desc or is_anonymous or (len(buffer) >= _AUDIT_BUFFER_FLUSH_SIZE):
                         dialogue_context = "\n".join(buffer)
                         await db[COL_SESSIONS].update_one(
                             {"session_id": session_id},
@@ -229,12 +253,6 @@ class FactExtractor:
                         await self._audit_and_sink(
                             raw_uid, session_id, dialogue_context,
                             existing_mem, is_anonymous, image_id,
-                        )
-                    else:
-                        await db[COL_SESSIONS].update_one(
-                            {"session_id": session_id},
-                            {"$set": {"audit_buffer": buffer}},
-                            upsert=True,
                         )
                 finally:
                     # 无论临界区是否成功，持有锁时必须释放
@@ -408,16 +426,28 @@ class FactExtractor:
         try:
             new_vec = await self._get_multimodal_embedding(fact)
 
-            # 全量打捞用户向量（包含 vector 字段），在同 category 范围内检测冲突
-            all_vecs = await qc.get_user_vectors(user_id, with_vectors=True)
+            # 只拉同 category 向量（包含 vector 字段），在 category 范围内检测冲突
+            all_vecs = await qc.get_user_vectors(user_id, with_vectors=True, category=category)
+
+            # 向量数软上限：超限时先局部整合再写入，防止 AutoDream 关闭时向量无限堆积。
+            # 失败静默：整合异常不阻断写入主流程。
+            if len(all_vecs) >= _CAT_VECTOR_LIMIT:
+                logger.info(
+                    f"🧹 [VectorCap] category={category} 向量数={len(all_vecs)} 超限，"
+                    f"触发局部整合 | uid={user_id[:8]}"
+                )
+                try:
+                    await self._consolidate_single_category(user_id, category)
+                    # 整合后重新拉取，避免冲突检测基于已失活的旧向量
+                    all_vecs = await qc.get_user_vectors(user_id, with_vectors=True, category=category)
+                except Exception as _cap_err:
+                    logger.warning(f"⚠️ [VectorCap] 局部整合失败，跳过继续写入 | {_cap_err}")
             db = self.db_manager.db
 
             for mem in all_vecs:
                 mem_fact_id = mem.get("fact_id", "")
                 if mem_fact_id == atomic_id:
                     continue  # 跳过自身
-                if mem.get("category") != category:
-                    continue  # 只在同 category 内检测
 
                 mem_vec = mem.get("vector", [])
                 if not mem_vec:
@@ -467,7 +497,8 @@ class FactExtractor:
         """
         try:
             # 检查 Qdrant 中是否已有相同 fact_id + 相同 content（避免重复 Embedding）
-            existing_vecs = await qc.get_user_vectors(user_id)
+            # with_vectors=True：content 未变时直接复用旧向量，无需重新 Embedding
+            existing_vecs = await qc.get_user_vectors(user_id, with_vectors=True, category=category)
             existing = next(
                 (v for v in existing_vecs if v.get("fact_id") == atomic_id), None
             )
@@ -564,12 +595,13 @@ class FactExtractor:
         返回：{"merged": int, "pruned": int} 供日志使用
         """
         CONSOLIDATE_THRESHOLD = int(os.getenv("AUTODREAM_THRESHOLD", 30))
-        CONSOLIDATE_PROMPT = """你是希卡莉喵的记忆整合模块。请将以下关于同一用户的零散事实片段压缩成 1-3 条精炼摘要。
+        CONSOLIDATE_PROMPT = """你是希卡莉喵的记忆整合模块。请将以下关于同一用户的零散事实片段压缩成 1-2 条精炼摘要。
 
 要求：
 1. 保留具体信息（职业、名字、喜好、经历），删除重复和冗余。
 2. 每条摘要用陈述句，20-50字。
-3. 只输出 JSON：{{"summaries": ["摘要1", "摘要2"]}}，不输出任何解释。
+3. 必须严格压缩：输入再多碎片，最终只输出 1-2 条——合并同类项，不要逐条保留。
+4. 只输出 JSON：{{"summaries": ["摘要1", "摘要2"]}}，不输出任何解释。
 
 分类：{category}
 事实片段：
@@ -651,8 +683,8 @@ class FactExtractor:
                         pass
                 pruned_count += len(old_fact_ids)
 
-                # 写入合并摘要 fact
-                for summary in summaries[:3]:
+                # 写入合并摘要 fact（上限与 prompt 对齐：最多 2 条）
+                for summary in summaries[:2]:
                     summary = summary.strip()
                     if not summary:
                         continue
@@ -692,13 +724,101 @@ class FactExtractor:
 
         return {"merged": merged_count, "pruned": pruned_count}
 
+    async def _consolidate_single_category(self, user_id: str, category: str) -> None:
+        """
+        [局部整合] 对单个 category 执行一次 AutoDream 压缩，复用 consolidate_facts 的核心逻辑。
+
+        调用场景：_conflict_check_and_sink 检测到该 category 向量数超过 _CAT_VECTOR_LIMIT。
+        与 AutoDream 并发安全：deactivate_vector 和 upsert_vector 均幂等，
+        最坏情况下双方写入相同摘要（fact_id 由内容 MD5 决定），下次整合会合并，无数据损坏。
+        """
+        db = self.db_manager.db
+        now = datetime.now(timezone.utc)
+
+        cursor = db[COL_FACTS].find(
+            {"user_id": user_id, "category": category, "is_active": True},
+            {"fact_id": 1, "topic": 1, "content": 1, "confidence": 1},
+        ).sort("confidence", -1).limit(20)
+        facts = await cursor.to_list(length=20)
+
+        if len(facts) < 5:
+            return
+
+        fragments_text = "\n".join(
+            f"[{f.get('topic', '未知')}] {f.get('content', '')}"
+            for f in facts
+        )
+
+        resp = await asyncio.to_thread(
+            self.client.chat.completions.create,
+            model=self.model,
+            messages=[{
+                "role": "user",
+                "content": CONSOLIDATE_PROMPT.format(
+                    category=category,
+                    fragments=fragments_text,
+                ),
+            }],
+            max_tokens=300,
+            stream=False,
+        )
+        raw = resp.choices[0].message.content
+        match = re.search(r'\{"summaries"\s*:\s*\[.*?\]\s*\}', raw, re.DOTALL)
+        if not match:
+            return
+        summaries = json.loads(match.group()).get("summaries", [])
+        if not summaries:
+            return
+
+        old_fact_ids = [f["fact_id"] for f in facts]
+        await db[COL_FACTS].update_many(
+            {"fact_id": {"$in": old_fact_ids}},
+            {"$set": {"is_active": False, "updated_at": now}},
+        )
+        for fid in old_fact_ids:
+            try:
+                await qc.deactivate_vector(fid)
+            except Exception:
+                pass
+
+        for summary in summaries[:2]:
+            summary = summary.strip()
+            if not summary:
+                continue
+            seed = f"{user_id}_{category}_dream_summary_{summary[:20]}"
+            new_id = hashlib.md5(seed.encode()).hexdigest()[:16]
+            await db[COL_FACTS].update_one(
+                {"fact_id": new_id},
+                {
+                    "$set": {
+                        "user_id":    user_id,
+                        "subject":    "用户",
+                        "category":   category,
+                        "topic":      "整合摘要",
+                        "content":    summary,
+                        "is_active":  True,
+                        "confidence": 0.9,
+                        "updated_at": now,
+                        "source":     "autodream",
+                    },
+                    "$setOnInsert": {"created_at": now, "mention_count": 1},
+                },
+                upsert=True,
+            )
+            await self._vectorize_and_store_v3(user_id, summary, 0.9, category, new_id, "")
+
+        logger.info(
+            f"🧹 [VectorCap] 局部整合完成 | uid={user_id[:8]} | "
+            f"category={category} | pruned={len(old_fact_ids)} | merged={len(summaries[:2])}"
+        )
+
     def _parse_json_brute_force(self, raw: Any) -> List[Dict]:
         """
         解析 LLM 返回的 JSON，容忍前后有解释文字。
 
         策略：
         1. 非贪婪匹配找 {"fragments": [...]} 结构
-        2. 字段白名单校验，过滤结构非法条目
+        2. 字段白名单校验，过��结构非法条目
         3. 任何异常返回 []，不向上抛出
         """
         REQUIRED = {"content"}

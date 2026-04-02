@@ -346,6 +346,8 @@ class HikariBotOrchestrator:
                 )
 
             # ── 9. 图生图任务路由（两级降级：Temporal → asyncio）──
+            # [工具分支扩展点] 新增工具任务时在此追加同类 if 块。
+            # 触发重构为独立路由层的条件：工具分支超过 4 个，或出现嵌套条件。
             if is_image_gen:
                 logger.info(f"🎨 [ImageGen] 触发图生图 | image_id={image_id[:8]}")
                 await _dispatch_image_gen_task(

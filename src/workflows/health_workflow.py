@@ -207,6 +207,31 @@ async def persist_health_result(result: dict) -> None:
             }
         )
         logger.warning(f"persist_health_result: unhealthy services={unhealthy}")
+
+        # 飞书 webhook 主动推送（FEISHU_ALERT_WEBHOOK 不配置时静默跳过）
+        webhook_url = os.getenv("FEISHU_ALERT_WEBHOOK", "").strip()
+        if webhook_url:
+            try:
+                import aiohttp as _aiohttp
+                body = {
+                    "msg_type": "text",
+                    "content": {
+                        "text": (
+                            f"⚠️ Hikari 健康检查告警\n"
+                            f"失败服务：{', '.join(unhealthy)}\n"
+                            f"时间：{now.strftime('%Y-%m-%d %H:%M:%S')} UTC"
+                        )
+                    },
+                }
+                async with _aiohttp.ClientSession() as _s:
+                    await _s.post(
+                        webhook_url,
+                        json=body,
+                        timeout=_aiohttp.ClientTimeout(total=5),
+                    )
+                logger.info(f"persist_health_result: 飞书告警已推送 | services={unhealthy}")
+            except Exception as _e:
+                logger.warning(f"persist_health_result: 飞书告警推送失败（不影响主流程）| {_e}")
     else:
         logger.debug("persist_health_result: all services healthy")
 

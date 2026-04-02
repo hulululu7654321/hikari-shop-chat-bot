@@ -91,6 +91,14 @@ async def handle_round1():
                 "data":    None,
             }), 400
 
+        MAX_IMAGES = 9
+        if len(image_ids) > MAX_IMAGES:
+            return jsonify({
+                "code":    400,
+                "message": f"最多支持 {MAX_IMAGES} 张图片喵，选最好看的几张就行～",
+                "data":    None,
+            }), 400
+
         # 解析平台和 user_hint
         triggered, platform, user_hint = is_copywriting_trigger(user_text, image_ids)
         if not triggered:

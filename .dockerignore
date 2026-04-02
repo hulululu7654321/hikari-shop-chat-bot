@@ -73,6 +73,7 @@ tests/
 .claude/
 *.md
 *.txt
+!requirements*.txt
 *.bak
 *.log
 *.tmp

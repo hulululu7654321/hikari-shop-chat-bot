@@ -1,6 +1,6 @@
 # 希卡莉·希卡莉喵 (Hikari-Chat-cosplayer) 开发文档
 
-> 版本：v8.5 · 重构基准：MASTER v3.0 · 文档生成日期：2026-04-01 · 修订：Redis Stream 定向推送替代 PubSub 广播、core_facts/core_memories 索引补全、copywriting 降级告警（v8.2→v8.3）；rag_service deactivate Qdrant ID 类型修复、图生图配额扣减条件修复、.env 补全密码变量（v8.3→v8.4）；三层架构契约规则、跨小程序数据打通规则、模块间通信规则正式写入文档（v8.4→v8.5）
+> 版本：v8.9 · 重构基准：MASTER v3.0 · 文档生成日期：2026-04-02 · 修订：Redis Stream 定向推送替代 PubSub 广播、core_facts/core_memories 索引补全、copywriting 降级告警（v8.2→v8.3）；rag_service deactivate Qdrant ID 类型修复、图生图配额扣减条件修复、.env 补全密码变量（v8.3→v8.4）；三层架构契约规则、跨小程序数据打通规则、模块间通信规则正式写入文档（v8.4→v8.5）；Redis 永久 Key 加 TTL、nginx upstream ip_hash 粘性会话、Qdrant category 过滤 + KeyError 修复、copywriting 图片数量硬上限（v8.5→v8.6）；飞书 webhook 告警推送、audit_buffer $push 原子追加 + $slice 上限（v8.6→v8.7）；orchestrator 重构决策记录、AutoDream 整合压缩率强化（prompt + 代码上限 1-3→1-2）（v8.7→v8.8）；单 category 向量数软上限 + 局部整合自愈（v8.8→v8.9）
 
 ---
 
@@ -222,7 +222,7 @@ Hybrid RAG + Responses API 的核心推理层，单例模式。
 
 - **PRE 阶段**（匿名用户触发）：同步调用 LLM 提取 CN/昵称，禁止提取 AI 自身名字（`bot_dna` 黑名单）。命中后调用 `_atomic_identity_sync()` 原子写库，返回 `{detected_name}` 触发 +5 好感度脉冲。
 
-- **POST 阶段**：通过 `audit_buffer` 积累对话片段（含视觉描述），达到 3 条或触发特殊条件时，调用 LLM 提取 7 大类事实（bio/pref/exp/rel/trait/plan/vision），经置信度阈值过滤（`VALUE_THRESHOLD=0.7`）后写入 `core_facts`（MongoDB）并向量化写入 Qdrant（`upsert_vector`）。冲突检测：先从 Qdrant 全量打捞用户向量，相同 category 冲突时 `deactivate_vector`。
+- **POST 阶段**：通过 `audit_buffer` 积累对话片段（含视觉描述），达到 3 条或触发特殊条件时，调用 LLM 提取 7 大类事实（bio/pref/exp/rel/trait/plan/vision），经置信度阈值过滤（`VALUE_THRESHOLD=0.7`）后写入 `core_facts`（MongoDB）并向量化写入 Qdrant（`upsert_vector`）。冲突检测：调用 `qdrant_client.get_user_vectors(category=category)` 只拉同分类向量（而非全量），相同 category 冲突时 `deactivate_vector`。向量化落盘同样传 `category` 过滤，`with_vectors=True` 获取旧向量用于 content 未变时的复用（修复了原 `with_vectors=False` 时访问 `existing["vector"]` 的潜在 KeyError）。
 
 **`retrieve_relevant_facts()`**：豆包 multimodal_embeddings 向量化查询文本，调用 `qdrant_client.search_vectors(score_threshold=0.6)`，返回含资产提示的记忆描述字符串。
 
@@ -640,8 +640,8 @@ send_loop()  →  asyncio.Queue → 前端下行（TTS / 图生图 / 文案 / �
 | `hikari:store:danmaku_cool:{store_id}` | String | 120s | 弹幕群体广播冷却 |
 | `hikari:store:danmaku_lock:{store_id}` | String（NX） | 30s | 弹幕分析互斥锁 |
 | `hikari:copy:state:{user_id}` | String（JSON） | 10min | 文案两轮状态机（grid_fid/platform/state） |
-| `hikari:milestone:last:{sid}` | String | 永久 | 好感度里程碑进度锚点（存储本 Session 已触发的最高阈值整数，单调递增） |
-| `hikari:archive:count:{sid}` | String | 永久 | 画像归档累计计数 |
+| `hikari:milestone:last:{sid}` | String | 90 天 | 好感度里程碑进度锚点（存储本 Session 已触发的最高阈值整数，单调递增）。session_id 每次连接重新生成，旧 key 会随 TTL 自然消亡 |
+| `hikari:archive:count:{sid}` | String | 180 天 | 画像归档累计计数。到期归零，最坏情况下多跑一次归档，无数据损坏 |
 | `hikari:fact_lock:{user_id}` | String（NX） | 30s | 事实提取 Redis 分布式锁，防多 Worker 并发重复提取 |
 
 ### 6.2 对话历史加密规范
@@ -1227,14 +1227,24 @@ X-Store-Key（secrets.compare_digest 时序安全）
 | 优先级 | 位置 | 问题描述 | 影响 |
 |---|---|---|---|
 | 低 | `user.py schema` | `phone` 字段已播种但功能未实现（签到时写入手机号） | 待实现门店签到绑定手机号功能，需前后端联调 |
-| 低 | `gunicorn.conf.py` | hikari-api 使用 `workers=2`，多容器水平扩容时不同容器间 WebSocket miss 问题仍存在（单容器内已通过 Redis Stream 解决）。根治方案：nginx sticky session 或 Redis Stream 路由（Stream 已落地，nginx 侧需配合） | 单容器内 miss 已解决；多容器扩容时需配置 nginx ip_hash |
+| 暂不动 | `orchestrator.py` | `handle_user_interaction` 同时承担数据准备和任务编排，长度有压迫感。**经 2026-04-02 审计**：当前实际只有一条主路径 + 图生图附加任务，makeup/copywriting 走独立工具容器不经过此文件，五条路径的描述是夸大的。触发重构的条件：工具分支超过 4 个（含图生图）且出现嵌套条件，或同一路径内复用逻辑超过 3 处。扩展点见第 349 行注释。 | 当前可控，过早抽路由层反而增加维护成本 |
+| 暂不动 | `qdrant_client.py` | 单用户全局向量总数无硬上限，scroll limit=500 只是拉取上限，不阻止写入。单 category 软上限已在 v8.9 加入（`_CAT_VECTOR_LIMIT=30`，超限自动局部整合）。全局总量上限等实测数据再决策：若观测到某用户向量数接近 200 条或查询延迟明显，在 `_conflict_check_and_sink` 入口加全局向量数检查。 | category 级已有护栏，全局级等实测数据 |��上限，不阻止写入。AutoDream 整合后是慢增长，重度活跃用户长期使用后向量数量可能影响 scroll 延迟。**触发处理条件**：实际观测到某用户向量数接近 200 条，或 `_conflict_check_and_sink` 耗时出现明显增长。届时在 `_conflict_check_and_sink` 入口加每用户向量数检查，超限时先触发一次强制 AutoDream 再写入。 | 当前无感，等实测数据再决策 |
 
 **已解决（收录于 §13.1）**：
 - `memory_storage.save_memory()` 去重无索引 → `hikari_memories_dedup_v1` 已在 `ensure_indexes` 中建立（v8.3）
 - `core_facts` 缺少复合索引 → `hikari_facts_category_v1` / `hikari_facts_confidence_v1` / `hikari_facts_active_v1` 已在 `ensure_indexes` 中建立（v8.3）
 - `copywriting_workflow` 双重失败无告警 → 已写入 `core_system_alerts`（v8.3）
 - Redis PubSub 多实例 miss → 已改为 Redis Stream 定向推送（v8.3）
-- `dialogue_engine` store import 解耦 → 经核查已通过 `store_interaction_activity.py` 桥接层合规，无需额外改造
+- `dialogue_engine` store import 解耦 → 经核查已���过 `store_interaction_activity.py` 桥接层合规，无需额外改造
+- `hikari:milestone:last:{sid}` / `hikari:archive:count:{uid}` 永久 TTL → 分别改为 90 天 / 180 天，防孤儿 key 累积（v8.6）
+- nginx 无 sticky session → 新增 `hikari_api_pool`（ip_hash）和 `hikari_api_store`（round-robin）双 upstream，用户端粘性、门店端负载均衡互不干扰（v8.6）
+- `fact_extractor._conflict_check_and_sink` 全量拉取向量 → 改为 `category` 过滤拉取，减少 Qdrant 传输量（v8.6）
+- `fact_extractor._vectorize_and_store_v3` content 未变路径 `existing["vector"]` KeyError → 改为 `with_vectors=True` 获取，复用旧向量正常（v8.6）
+- `copywriting/api.py` 无图片数量上限 → 新增 `MAX_IMAGES=9` 硬限制，防 PIL 拼图 OOM（v8.6）
+- `health_workflow` 无外部推送通道 → 新增飞书 webhook 推送（`FEISHU_ALERT_WEBHOOK` 环境变量，留空不推送），`aiohttp` 已有依赖，0 新引入（v8.7）
+- `fact_extractor` audit_buffer 写放大 → 改为 `find_one_and_update` + `$push/$slice`，原子追加单条，`$slice:-10` 守住上限，减少一次 RTT，flush 判断逻辑不变（v8.7）
+- `fact_extractor.consolidate_facts` AutoDream 整合压缩率不足 → prompt 从"1-3条"改为"1-2条"并增加强制合并要求，代码上限从 `summaries[:3]` 改为 `summaries[:2]`，prompt 与代码对齐（v8.8）
+- `fact_extractor` 单 category 向量无上限 → 新增 `_CAT_VECTOR_LIMIT=30` 常量 + `_consolidate_single_category()` 局部整合方法；`_conflict_check_and_sink` 写入前检查当前 category 向量数，超限时自动触发局部整合再写入；整合失败静默跳过不阻断主流程；与 AutoDream 并发时幂等安全（v8.9）
 
 ### 12.2 下一版本开发计划
 
@@ -1244,8 +1254,8 @@ X-Store-Key（secrets.compare_digest 时序安全）
 - 弹幕功能增强：弹幕历史记录持久化，管理后台可查
 
 **架构演进**：
-- 多容器水平扩容：hikari-api 扩容至多实例时，配置 nginx `ip_hash` sticky session，配合现有 Redis Stream 定向推送实现无 miss 多实例部署
 - `core_system_alerts` 告警类型扩展：目前仅有健康检查和 copywriting 失败，可扩展至 TTS 连续失败、Qdrant 写入失败等场景
+- 时序 metrics（成长性缺口，当前阶段不需要）：QPS、P99 延迟、各服务错误率目前只能从日志手动挖。**现状**：零 metrics 基础设施（已确认，全代码库无 prometheus/statsd/datadog 引用）。**触发条件**：并发压力开始影响用户体验、需要容量规划、或开始跑 A/B 测试时再建。**推荐方案**：在 nginx 层接 Prometheus + Grafana（`nginx-prometheus-exporter`），无需改应用代码；如需应用层指标，在 Quart 的请求生命周期中间件里埋点即可。
 
 **跨团队对接**：
 - GPT-SoVITS 团队：确认多端口 Failover 时 WAV 文件命名规范，避免并发写入冲突
@@ -1457,11 +1467,45 @@ X-Store-Key（secrets.compare_digest 时序安全）
 - 修复手段：扣配额改为 `if VIP_LOCK_IMAGE_GEN and vip_info["is_vip"]:` 条件下执行
 - 存量数据：若生产环境 `VIP_LOCK_IMAGE_GEN=false` 且有用户触发过图生图，其 `image_gen_quota` 字段可能为负值；可执行 `db.core_users.updateMany({image_gen_quota:{$lt:0}},{$set:{image_gen_quota:0}})` 修复
 
+**Redis 永久 key 内存泄漏（v8.6 修复）**
+- 严重程度：低（当前内存可控，用户量增长后孤儿 key 累积）
+- 问题文件：`core/trigger_manager.py`
+- 根本原因：`hikari:milestone:last:{session_id}` 和 `hikari:archive:count:{user_id}` 写入时无 `ex=` 参数，TTL 永久。`session_id` 每次连接重新生成，旧 key 无法被清理，随用户量线性增长成为孤儿数据
+- 修复手段：`milestone` key 改为 `ex=86400*90`（90天），`archive:count` key 改为 `ex=86400*180`（180天）
+- 存量数据：Redis 中已有的永久 key 不受影响，自然存续直至 Redis 重启或手动清理。新写入的 key 从此有 TTL
+
+**nginx 无 sticky session，扩容时 WS miss（v8.6 修复）**
+- 严重程度：低（单容器无影响，多容器扩容时 WS 请求可能路由到不持有该连接的实例）
+- 问题文件：`deployment/nginx.conf`
+- 根本原因：所有 `hikari-api` 请求直接 `proxy_pass http://hikari-api:8000`，无 upstream 配置，多实例时无粘性
+- 修复手段：新增两个 upstream block：`hikari_api_pool`（ip_hash，用户端 WS）和 `hikari_api_store`（round-robin，门店端 WS）。单实例时两者等价。扩容时在 upstream 块追加 server 即可，所有 location 无需改动。特殊说明：门店场景多设备共享出口 IP，ip_hash 失去均衡意义，故门店 WS 单独用 round-robin
+- 存量数据：无，nginx reload 即生效
+
+**`fact_extractor._conflict_check_and_sink` 全量拉取向量（v8.6 修复）**
+- 严重程度：低（单用户 facts 少时无感，活跃用户 facts 积累后每次 POST 阶段拉取全量向量开销线性增长）
+- 问题文件：`core/fact_extractor.py`、`utils/qdrant_client.py`
+- 根本原因：`get_user_vectors(user_id, with_vectors=True)` 拉取所有分类的向量，随后在 Python 层 `if mem.get("category") != category: continue` 过滤，大量无效传输
+- 修复手段：`get_user_vectors` 新增可选参数 `category: str | None = None`，传入时在 Qdrant `scroll_filter` 加 `FieldCondition(key="category")` 过滤。`_conflict_check_and_sink` 传入 `category=category`，同时删除循环内冗余的 category 比较；`_vectorize_and_store_v3` 同步传入 `category=category, with_vectors=True`
+- 存量数据：无，接口向后兼容（不传 category 时行为不变）
+
+**`fact_extractor._vectorize_and_store_v3` content 未变路径 KeyError（v8.6 修复）**
+- 严重程度：中（content 未变时触发，抛 KeyError，导致本应复用旧向量的优化路径崩溃，错误被 `except` 吞掉，实际上每次都会重走 embedding）
+- 问题文件：`core/fact_extractor.py`
+- 根本原因：第 470 行 `get_user_vectors(user_id)` 使用默认 `with_vectors=False`，返回的记录中无 `"vector"` key；第 487 行 `vector=existing["vector"]` 触发 KeyError。"避免重复 Embedding"的优化实际从未生效
+- 修复手段：改为 `get_user_vectors(user_id, with_vectors=True, category=category)`，确保 content 未变路径能正确取到旧向量复用
+- 存量数据：无
+
+**`copywriting/api.py` 无图片数量上限 OOM（v8.6 修复）**
+- 严重程度：中（用户上传大量图片时 PIL 拼图内存超出容器 512m 限制，工具容器 OOM Kill）
+- 问题文件：`modules/tools/copywriting/api.py`
+- 根本原因：round1 端点只检查 `if not image_ids`（至少一张），无上限。PIL `_make_grid_image` 逐图解码，20 张 4096×4096 图约占 960MB，远超容器限制
+- 修复手段：在 `if not image_ids` 之后新增 `MAX_IMAGES = 9` 检查，超过返回 400。9 张 = 3×3 网格，也是合理的文案生成上限
+- 存量数据：无
+
 ### 13.2 代码质量备忘
 
-- `fact_extractor.py`：`audit_buffer` 存储在 `core_sessions` 文档中，该字段随 session 文档频繁更新，理论上应独立存储（如 Redis List），但目前业务量下无明显性能问题
+- `fact_extractor.py`：`audit_buffer` 存储在 `core_sessions` 文档中，该字段随 session 文档频繁更新，理论上应独立存储（如 Redis List），但目前已改为 `$push` 原子追加 + `$slice:-10` 上限，写放大问题已消除（v8.7）
 - `amap_service.py`：`_build_amap_context_regex` 正则降级方案较为简单，城市列表硬编码 42 个，海外用户或小城市用户可能无法正确提取城市
-- `copywriting_service.py`：网格图拼接使用 PIL，多图拼接时内存占用与图片数量线性增长，建议限制单次上传图片数量
 - `soul_config.py`：60s 内存缓存在多 Worker 场景下，SOUL 配置更新后最多需要 60 × Worker 数秒才能全部生效（每个 Worker 独立缓存）
 - `nekos_service.py`：NekosBest 为第三方公开 API，无 SLA 保障，目前任何失败静默降级（不发 GIF），建议增加可用性监控
 

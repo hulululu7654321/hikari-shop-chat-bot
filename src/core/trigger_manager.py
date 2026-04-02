@@ -61,7 +61,7 @@ class TriggerManager:
         [隔离检测 + 幂等锁] 确保每个里程碑在单次 Session 内仅触发一次。
 
         逻辑：跨越阈值 且 该阈值大于本 Session 历史触发记录 → 触发。
-        Redis key: hikari:milestone:last:{session_id}（MASTER 第五节，永久 TTL）
+        Redis key: hikari:milestone:last:{session_id}（MASTER 第五节，90 天 TTL）
         """
         redis = await self.db_manager.get_redis()
         last_milestone_key = f"hikari:milestone:last:{session_id}"
@@ -71,7 +71,7 @@ class TriggerManager:
 
         for m in self.milestones:
             if old_affinity < m <= new_affinity and m > last_m:
-                await redis.set(last_milestone_key, str(m))
+                await redis.set(last_milestone_key, str(m), ex=86400 * 90)
                 logger.info(
                     f"🎊 [Milestone] 关系进阶 | sid={session_id[:8]} | "
                     f"阈值={m} | 历史最高={last_m}"
@@ -157,9 +157,9 @@ class TriggerManager:
         return int(val) if val else 0
 
     async def _set_last_archive_count(self, user_id: str, count: int) -> None:
-        """写入归档进度锚点（永久 TTL，MASTER 第五节）"""
+        """写入归档进度锚点（180 天 TTL，MASTER 第五节）"""
         redis = await self.db_manager.get_redis()
-        await redis.set(f"hikari:archive:count:{user_id}", str(count))
+        await redis.set(f"hikari:archive:count:{user_id}", str(count), ex=86400 * 180)
 
     # ──────────────────────────────────────────────────────────────
     # 4. 冷场整活触发器（30 秒冷却防过度响应）
